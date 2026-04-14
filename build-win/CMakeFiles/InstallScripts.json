@@ -1,0 +1,13 @@
+{
+	"InstallScripts" : 
+	[
+		"C:/Users/skyes/Documents/bspviewer/skye3d/build-win/cmake_install.cmake",
+		"C:/Users/skyes/Documents/bspviewer/skye3d/build-win/src/lib/raylib/cmake_install.cmake",
+		"C:/Users/skyes/Documents/bspviewer/skye3d/build-win/src/lib/raylib/raylib/cmake_install.cmake",
+		"C:/Users/skyes/Documents/bspviewer/skye3d/build-win/src/lib/raylib/raylib/external/glfw/cmake_install.cmake",
+		"C:/Users/skyes/Documents/bspviewer/skye3d/build-win/src/lib/raylib/raylib/external/glfw/src/cmake_install.cmake",
+		"C:/Users/skyes/Documents/bspviewer/skye3d/build-win/src/lib/imgui/cmake_install.cmake",
+		"C:/Users/skyes/Documents/bspviewer/skye3d/build-win/src/lib/rlImGui/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

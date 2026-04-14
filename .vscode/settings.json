@@ -1,0 +1,44 @@
+{
+  "workbench.colorCustomizations": {
+    "window.activeBorder": "#9c60c9",
+    "window.inactiveBorder": "#9c60c9",
+    "activityBar.background": "#3F1E58",
+    "titleBar.activeBackground": "#582A7B",
+    "titleBar.inactiveBackground": "#3F1E58",
+    "titleBar.activeForeground": "#FCFBFE",
+    "titleBar.inactiveForeground": "#FCFBFE",
+    "panelTitle.activeForeground": "#9c60c9",
+    "editorGutter.modifiedBackground": "#00000000",
+    "editorGutter.addedBackground": "#00000000",
+    "editorGutter.deletedBackground": "#00000000",
+    "editorGutter.addedResourceForeground": "#00000000",
+    "editorGutter.modifiedResourceForeground": "#00000000",
+    "statusBar.background": "#3F1E58",
+    "statusBar.foreground": "#FCFBFE",
+    "statusBar.debuggingBackground": "#3F1E58",
+    "statusBar.debuggingForeground": "#FCFBFE",
+    "statusBar.noFolderBackground": "#3F1E58",
+    "statusBar.noFolderForeground": "#FCFBFE"
+  },
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[html]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[css]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[vue]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[squirrel]": {
+    "editor.defaultFormatter": "mnshdw.squirrel-lsp-vscode"
+  },
+  "vscode-squirrel.InlayHints": "both"
+}
