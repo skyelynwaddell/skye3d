@@ -2092,6 +2092,35 @@ static HSQUIRRELVM sqSetupVM(const char *side_name)
     // network
     sq_register_func(v, sq_connect_to_server, "connect_to_server");
 
+    // input mouse
+    sq_register_func(v, sq_is_mouse_button_pressed, "is_mouse_button_pressed");
+    sq_register_func(v, sq_is_mouse_button_down, "is_mouse_button_down");
+    sq_register_func(v, sq_is_mouse_button_released, "is_mouse_button_released");
+    sq_register_func(v, sq_is_mouse_button_up, "is_mouse_button_up");
+    sq_register_func(v, sq_get_mouse_x, "get_mouse_x");
+    sq_register_func(v, sq_get_mouse_y, "get_mouse_y");
+    sq_register_func(v, sq_get_mouse_delta, "get_mouse_delta");
+    sq_register_func(v, sq_get_mouse_wheel_move, "get_mouse_wheel_move");
+    sq_register_func(v, sq_set_mouse_cursor, "set_mouse_cursor");
+
+    // input keys
+    sq_register_func(v, sq_is_key_pressed, "is_key_pressed");
+    sq_register_func(v, sq_is_key_down, "is_key_down");
+    sq_register_func(v, sq_is_key_released, "is_key_released");
+    sq_register_func(v, sq_is_key_up, "is_key_up");
+
+    // gamepad
+    sq_register_func(v, sq_is_gamepad_available, "is_gamepad_available");
+    sq_register_func(v, sq_get_gamepad_name, "get_gamepad_name");
+    sq_register_func(v, sq_is_gamepad_button_pressed, "is_gamepad_button_pressed");
+    sq_register_func(v, sq_is_gamepad_button_down, "is_gamepad_button_down");
+    sq_register_func(v, sq_is_gamepad_button_released, "is_gamepad_button_released");
+    sq_register_func(v, sq_is_gamepad_button_up, "is_gamepad_button_up");
+    sq_register_func(v, sq_get_gamepad_button_pressed, "get_gamepad_button_pressed");
+    sq_register_func(v, sq_get_gamepad_axis_count, "get_gamepad_axis_count");
+    sq_register_func(v, sq_get_gamepad_axis_movement, "get_gamepad_axis_movement");
+    sq_register_func(v, sq_set_gamepad_vibration, "set_gamepad_vibration");
+
     // cursor
     sq_register_func(v, sq_show_cursor, "show_cursor");
     sq_register_func(v, sq_hide_cursor, "hide_cursor");
@@ -2141,35 +2170,6 @@ static HSQUIRRELVM sqSetupVM(const char *side_name)
   sq_register_func(v, sq_send_packet_number, "send_packet_number");
   sq_register_func(v, sq_send_packet_vector3, "send_packet_vector3");
   sq_register_func(v, sq_get_packet, "get_packet");
-
-  // input mouse
-  sq_register_func(v, sq_is_mouse_button_pressed, "is_mouse_button_pressed");
-  sq_register_func(v, sq_is_mouse_button_down, "is_mouse_button_down");
-  sq_register_func(v, sq_is_mouse_button_released, "is_mouse_button_released");
-  sq_register_func(v, sq_is_mouse_button_up, "is_mouse_button_up");
-  sq_register_func(v, sq_get_mouse_x, "get_mouse_x");
-  sq_register_func(v, sq_get_mouse_y, "get_mouse_y");
-  sq_register_func(v, sq_get_mouse_delta, "get_mouse_delta");
-  sq_register_func(v, sq_get_mouse_wheel_move, "get_mouse_wheel_move");
-  sq_register_func(v, sq_set_mouse_cursor, "set_mouse_cursor");
-
-  // input keys
-  sq_register_func(v, sq_is_key_pressed, "is_key_pressed");
-  sq_register_func(v, sq_is_key_down, "is_key_down");
-  sq_register_func(v, sq_is_key_released, "is_key_released");
-  sq_register_func(v, sq_is_key_up, "is_key_up");
-
-  // gamepad
-  sq_register_func(v, sq_is_gamepad_available, "is_gamepad_available");
-  sq_register_func(v, sq_get_gamepad_name, "get_gamepad_name");
-  sq_register_func(v, sq_is_gamepad_button_pressed, "is_gamepad_button_pressed");
-  sq_register_func(v, sq_is_gamepad_button_down, "is_gamepad_button_down");
-  sq_register_func(v, sq_is_gamepad_button_released, "is_gamepad_button_released");
-  sq_register_func(v, sq_is_gamepad_button_up, "is_gamepad_button_up");
-  sq_register_func(v, sq_get_gamepad_button_pressed, "get_gamepad_button_pressed");
-  sq_register_func(v, sq_get_gamepad_axis_count, "get_gamepad_axis_count");
-  sq_register_func(v, sq_get_gamepad_axis_movement, "get_gamepad_axis_movement");
-  sq_register_func(v, sq_set_gamepad_vibration, "set_gamepad_vibration");
 
   // system
   sq_register_func(v, sq_get_camera_position, "get_camera_position");

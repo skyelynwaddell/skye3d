@@ -67,6 +67,35 @@ obj.helloworld();
 // Networking
 void connect_to_server(); // connects client to a server
 
+// Input Keys
+bool is_key_pressed(int key); // returns true the frame the key is pressed
+bool is_key_down(int key); // returns true if key is down
+bool is_key_released(int key); // returns true the frame they key is released
+bool is_key_up(int key); // returns true if the key is up
+float get_mouse_x(); // returns mouse_x
+float get_mouse_y(); // returns mouse_y
+float get_mouse_delta(); // returns mouse delta
+float get_mouse_wheel_move(); // returns mouse wheel move
+void set_mouse_cursor(int cursor_id); // set the mouse cursor by cursor id
+
+// Input Mouse
+bool is_mouse_button_pressed(int key); // returns true the frame the mb is pressed
+bool is_mouse_button_down(int key); // returns true if mb is down
+bool is_mouse_button_released(int key); // returns true the frame the key is released
+bool is_mouse_button_up(int key); // returns true if they mb is up
+
+// Gamepad
+bool is_gamepad_available(int index);
+string get_gamepad_name(int index);
+bool is_gamepad_button_pressed(int index, int button);
+bool is_gamepad_button_down(int index, int button);
+bool is_gamepad_button_released(int index, int button);
+bool is_gamepad_button_up(int index, int button);
+int get_gamepad_button_pressed(); // returns the enum value of the last pressed button
+int get_gamepad_axis_count(int index);
+float get_gamepad_axis_movement(int index, int axis); // returns -1.0 to 1.0
+void set_gamepad_vibration(int index, float left_motor, float right_motor, float duration);
+
 // Window
 void toggle_fullscreen(); // Toggles window fullscreen
 void toggle_borderless_windowed(); // Toggles window bordless windowed
@@ -116,35 +145,6 @@ string side_name; // returns either CLIENT or SERVER side depending on if user i
 void send_packet_number(int client_id, string event_name, float data); // sends a packet to Server or Client
 void send_packet_vector3(int client_id, string event_name, Vector3 data); // sends a packet to Server or Client
 Packet get_packet(); // returns a Packet object {client_id, name, data} when received from Server or Client
-
-// Input Keys
-bool is_key_pressed(int key); // returns true the frame the key is pressed
-bool is_key_down(int key); // returns true if key is down
-bool is_key_released(int key); // returns true the frame they key is released
-bool is_key_up(int key); // returns true if the key is up
-float get_mouse_x(); // returns mouse_x
-float get_mouse_y(); // returns mouse_y
-float get_mouse_delta(); // returns mouse delta
-float get_mouse_wheel_move(); // returns mouse wheel move
-void set_mouse_cursor(int cursor_id); // set the mouse cursor by cursor id
-
-// Input Mouse
-bool is_mouse_button_pressed(int key); // returns true the frame the mb is pressed
-bool is_mouse_button_down(int key); // returns true if mb is down
-bool is_mouse_button_released(int key); // returns true the frame the key is released
-bool is_mouse_button_up(int key); // returns true if they mb is up
-
-// Gamepad
-bool is_gamepad_available(int index);
-string get_gamepad_name(int index);
-bool is_gamepad_button_pressed(int index, int button);
-bool is_gamepad_button_down(int index, int button);
-bool is_gamepad_button_released(int index, int button);
-bool is_gamepad_button_up(int index, int button);
-int get_gamepad_button_pressed(); // returns the enum value of the last pressed button
-int get_gamepad_axis_count(int index);
-float get_gamepad_axis_movement(int index, int axis); // returns -1.0 to 1.0
-void set_gamepad_vibration(int index, float left_motor, float right_motor, float duration);
 
 // System
 Vector3 get_camera_position(); // Gets the 3d camera's x y z position
