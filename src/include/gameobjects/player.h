@@ -4,6 +4,8 @@
 #include <functional>
 #include <server_ops.h>
 #include <net_utils.h>
+#include <bsp.h>
+#include <camera3d.h>
 
 class Player : public GameObject3D
 {

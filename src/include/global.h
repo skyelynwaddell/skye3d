@@ -1,5 +1,4 @@
 #pragma once
-#include <raylib.h>
 #include <string>
 
 // networking props
@@ -21,5 +20,3 @@ inline bool global_show_collisions = true;
 inline bool global_draw_fps = false;
 inline float global_fps_x = 0.0f;
 inline float global_fps_y = 0.0f;
-
-inline Font font_primary = {0};

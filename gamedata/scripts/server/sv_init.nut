@@ -6,10 +6,10 @@ function helloworld()
 
 function init() {
 	print("\n\n### SV INIT CALLED ###\n");
-	server.start_server();
+	start_server();
 
 	// create a dummy "torch" object
-	local obj = server.instance_create(0,0,0);
+	local obj = instance_create(0,0,0);
 	obj.set_target_name("torch");
 	obj.set_position(10.5, 20.0, -5.2);
 
@@ -24,7 +24,7 @@ function init() {
 	print("Object Position: x=" + pos.x + " y=" + pos.y + " z=" + pos.z + "\n");
 
 	// find the dummy torch object later
-	local torches = server.instances_get("torch");
+	local torches = instances_get("torch");
 	foreach (i, torch in torches){
 
 		// print the found torch pos

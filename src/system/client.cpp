@@ -1,8 +1,10 @@
 // client.cpp
 #include "enet.h"
 #include <cstdint>
-#include <global.h>
-#include <sq.h>
+#include "global.h"
+#include "sq.h"
+#include <net_utils.h>
+#include <gameobject3d.h>
 #include <player.h>
 
 ENetHost *client = NULL;
@@ -83,6 +85,7 @@ int enetclient_connect(const char *host, unsigned short port)
       if (event.type == ENET_EVENT_TYPE_CONNECT)
       {
         printf("[CLIENT]: Connected to server %s:%u\n", host, port);
+        global_client_init_called = true;
         return true;
       }
     }
@@ -300,7 +303,6 @@ void enetclient_update()
       else if (type == MESSAGE_TYPE_ASSIGN_ID)
       {
         memcpy(&my_local_player_id, payload, sizeof(int));
-        global_client_init_called = true;
 
         // Check if server already created our object (host case)
         bool found = false;

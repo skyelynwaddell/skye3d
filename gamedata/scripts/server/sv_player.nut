@@ -1,5 +1,5 @@
 function player_update(){
-	local me = server.get_player_instance(0);
+	local me = get_player_instance(0);
 
 	// if (me){
 	// 	local pos = me.get_position();

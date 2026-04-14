@@ -9,15 +9,6 @@ enum STATE {
 state <- STATE.IDLE;
 function change_state(new_state){ state = new_state; };
 
-// JUMP
-function jump() {
-	print("jump\n");
-	change_state(STATE.JUMP);
-};
-function can_jump() {
-	sendflag(SENDFLAG_JUMP, button_jump_pressed(), button_jump_released(), jump);
-};
-
 
 // RELOAD
 function reload(){
@@ -53,6 +44,5 @@ main player update function
 function player_update() {
 	can_shoot();
 	can_reload();
-	can_jump();
 	can_interact();
 };

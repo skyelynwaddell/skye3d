@@ -1,8 +1,7 @@
 // net_utils.h
 #pragma once
-#include "enet.h"
 #include "global.h"
-#include <raylib.h>
+#include "enet.h"
 #include <vector>
 #include <variant>
 #include <cstdint>

@@ -1,6 +1,5 @@
 // cs_update.nut
 function update(dt) {
-	if (!poll_packets()) return;
-
+	poll_packets();
 	player_update();
 };

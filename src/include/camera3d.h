@@ -4,6 +4,8 @@
 #include <raymath.h>
 #include <rlights.h>
 #include <algorithm>
+#include <memory>
+#include "rlgl.h"
 
 inline std::unique_ptr<Camera> camera;
 inline long shaderModTime;

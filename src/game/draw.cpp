@@ -2,6 +2,7 @@
 #include <camera3d.h>
 #include <sq.h>
 #include <gameobject3d.h>
+#include <bsp.h>
 
 void Draw()
 {
@@ -17,7 +18,7 @@ void Draw()
 
   BSP_Draw(shader, enable_wireframe);
   GameObject3D_DrawAll();
-  
+
   EndMode3D();
 
   // if (enable_imgui)

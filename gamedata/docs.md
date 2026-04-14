@@ -4,17 +4,18 @@
 
 ```cpp
 // Networking
-void server.start_server(); // call at start of sv_init.nut
-int server.get_player_count(); // returns player count of the connected server
+void start_server(); // call at start of sv_init.nut
+int get_player_count(); // returns player count of the connected server
+void sendflags_sync(); // syncs the updated sendflags variable to server
 ```
 
 ```cpp
 // instance creation & sub funcs
-local obj = server.instance_create(float x, float y, float z); // spawns a GameObject3D
-local objs = server.instances_get_all(); // returns an array of ALL gameobject references
-local objs = server.instances_get(string target_name); // returns an array of references to gameobjects with the same target_name (use "player" to return an array of all the players)
-local player = server.get_player_instance(int client_id); // returns reference of player object instance by client_id
-int server.get_instance_count(); // returns amount of spawned GameObject3D's in the world (including players)
+local obj = instance_create(float x, float y, float z); // spawns a GameObject3D
+local objs = instances_get_all(); // returns an array of ALL gameobject references
+local objs = instances_get(string target_name); // returns an array of references to gameobjects with the same target_name (use "player" to return an array of all the players)
+local player = get_player_instance(int client_id); // returns reference of player object instance by client_id
+int get_instance_count(); // returns amount of spawned GameObject3D's in the world (including players)
 
 obj.destroy();  // destroys the GameObject3D
 obj.get(string variable_name); // gets a value of type [int, float, string, bool] by name
@@ -51,7 +52,7 @@ function helloworld()
     print("mana: " + this.get("mana"));
     print("eliminated: " + this.get("eliminated"));
 };
-obj = server.instance_create(0, 0, 0);
+obj = instance_create(0, 0, 0);
 obj.set("name", "skye");
 obj.set("health", 100);
 obj.set("mana", 3.4);
@@ -63,6 +64,45 @@ obj.helloworld();
 ### [CL] Client Side
 
 ```cpp
+// Networking
+void connect_to_server(); // connects client to a server
+
+// Window
+void toggle_fullscreen(); // Toggles window fullscreen
+void toggle_borderless_windowed(); // Toggles window bordless windowed
+void maximize_window(); // Maximizes window
+void minimize_window(); // Minimizes window
+void restore_window(); // Restores window
+void set_window_icon(string filepath); // Set window icon by filepath
+void set_window_title(string title); // Set window title
+void set_window_position(float x, float y); // Set window position by xy
+float get_screen_width(); // returns window width
+float get_screen_height(); // returns window height
+float get_render_width(); // returns render width
+float get_render_height(); // returns render height
+
+// Cursor
+void show_cursor(); // shows cursor if hidden
+void hide_cursor(); // hides cursor if visible
+bool is_cursor_hidden(); // returns true if cursor is hidden
+void enable_cursor(); // enable cursor
+void disable_cursor(); // disable cursor
+bool is_cursor_on_screen(); // returns true if the mouse cursor is currently on screen
+
+// Drawing
+void clear_background(Color color); // clears background with a Color [ie. COLOR.GOLD]
+void begin_scissor_mode(int x, int y, int width, int height); // begin scissor mode
+void end_scissor_mode(); // end scissor mode
+
+// RText
+void load_font(string filename, int font_size); // load a font from file location
+void draw_text(string text, int x, int y, int font_size, Color color); // draw text on screen
+
+// RShapes
+void draw_rectangle(int x, int y, int width, int height, Color color); // draws a 2d rectangle
+
+// RModels
+void draw_cube(float x, float y, float z, float width, float height, float length);
 
 ```
 
@@ -73,8 +113,6 @@ obj.helloworld();
 string side_name; // returns either CLIENT or SERVER side depending on if user is host
 
 // Networking
-void connect_to_server(); // connects client to a server
-void sendflags_sync(); // syncs the updated sendflags variable to server
 void send_packet_number(int client_id, string event_name, float data); // sends a packet to Server or Client
 void send_packet_vector3(int client_id, string event_name, Vector3 data); // sends a packet to Server or Client
 Packet get_packet(); // returns a Packet object {client_id, name, data} when received from Server or Client
@@ -110,31 +148,6 @@ void set_gamepad_vibration(int index, float left_motor, float right_motor, float
 
 // System
 Vector3 get_camera_position(); // Gets the 3d camera's x y z position
-void toggle_fullscreen(); // Toggles window fullscreen
-void toggle_borderless_windowed(); // Toggles window bordless windowed
-void maximize_window(); // Maximizes window
-void minimize_window(); // Minimizes window
-void restore_window(); // Restores window
-void set_window_icon(string filepath); // Set window icon by filepath
-void set_window_title(string title); // Set window title
-void set_window_position(float x, float y); // Set window position by xy
-float get_screen_width(); // returns window width
-float get_screen_height(); // returns window height
-float get_render_width(); // returns render width
-float get_render_height(); // returns render height
-
-// Cursor
-void show_cursor(); // shows cursor if hidden
-void hide_cursor(); // hides cursor if visible
-bool is_cursor_hidden(); // returns true if cursor is hidden
-void enable_cursor(); // enable cursor
-void disable_cursor(); // disable cursor
-bool is_cursor_on_screen(); // returns true if the mouse cursor is currently on screen
-
-// Drawing
-void clear_background(Color color); // clears background with a Color [ie. COLOR.GOLD]
-void begin_scissor_mode(int x, int y, int width, int height); // begin scissor mode
-void end_scissor_mode(); // end scissor mode
 
 // Timing
 void set_target_fps(int target_fps); // set the windows target fps (doesn't mean fps will be it)
@@ -145,16 +158,6 @@ float get_fps(); // returns current fps game is running at
 // RNG
 void set_random_seed(int new_seed); // sets a new random seed of choice
 int get_random_value(int min, int max) // returns an inclusive range of min-max
-
-// RText
-void load_font(string filename, int font_size); // load a font from file location
-void draw_text(string text, int x, int y, int font_size, Color color); // draw text on screen
-
-// RShapes
-void draw_rectangle(int x, int y, int width, int height, Color color); // draws a 2d rectangle
-
-// RModels
-void draw_cube(float x, float y, float z, float width, float height, float length);
 
 ```
 

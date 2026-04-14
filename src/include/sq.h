@@ -2,6 +2,7 @@
 #pragma once
 #include <squirrel.h>
 #include <string>
+#include "fonts.h"
 
 inline HSQUIRRELVM client_vm = nullptr;
 inline HSQUIRRELVM server_vm = nullptr;
@@ -16,7 +17,7 @@ enum VM_TYPE
 // functions callable via squirrel .nut files
 
 // [server] table
-// server side [server.start_server()]
+// server side [start_server()]
 SQInteger sq_start_server(HSQUIRRELVM vm);
 SQInteger sq_get_player_count(HSQUIRRELVM vm);
 

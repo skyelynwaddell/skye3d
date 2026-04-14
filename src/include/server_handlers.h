@@ -2,8 +2,8 @@
 #pragma once
 #include "enet.h"
 #include <functional>
+#include <raymath.h>
 #include <string>
-#include <raylib.h>
 #include "server_ops.h"
 
 using ServerPacketHandler = std::function<void(int sender_id, const void *payload, size_t len)>;

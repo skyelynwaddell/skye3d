@@ -83,7 +83,7 @@ sendflags_sync
 Syncs the clients sendflags with server
 */
 function sendflags_sync() {
-	send_request(player_id, "sendflags_sync", sendflags, PACKET_TYPE.NUMBER, function (packet) {});
+	send_request(player_id, "on_sendflags_sync", sendflags, PACKET_TYPE.NUMBER, function (packet) {});
 };
 
 
@@ -145,10 +145,6 @@ function poll_packets() {
 		}
 		packet = get_packet();
 	}
-
-		if (!is_connected()) 
-		return false;
-		else return true;
 };
 
 // Mandatory Network Events
@@ -180,10 +176,10 @@ function set_position() {
 get_player_count
 Gets the player count of the current connected server
 */
-function get_player_count() {
-	send_request(-1, "get_player_count", -1, PACKET_TYPE.NUMBER, function (packet) {
+function cs_get_player_count() {
+	print("calling cs_get_player_count\n");
+	send_request(player_id, "cs_get_player_count", -1, PACKET_TYPE.NUMBER, function (packet) {
 		total_players = packet.value;
 		print("total player count: " + total_players + "\n");
 	});
-	return total_players
 };

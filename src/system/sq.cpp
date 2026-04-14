@@ -254,6 +254,14 @@ Squirrel: send_packet_number(target_id, "name", value)
   Client  → sends float packet to Server CPP over ENet
   Server  → pushes float packet to SQ Client queue
 */
+/*
+sq_send_packet_number
+Squirrel: send_packet_number(target_id, "name", value)
+  Client  → sends float packet to Server CPP over ENet
+  Server  → sends float packet to Client:
+            - If target_id == local host player_id → push to SQ queue (local)
+            - If target_id == different client → send over ENet to that client
+*/
 SQInteger sq_send_packet_number(HSQUIRRELVM vm)
 {
   SQInteger target_id;
@@ -273,8 +281,36 @@ SQInteger sq_send_packet_number(HSQUIRRELVM vm)
   }
   else
   {
-    // Server SQ → Client SQ (via queue)
-    Net_ToSQClient((int)target_id, name_str, (float)val);
+    // Server is sending to a client
+    // Check if target is local host (same process) or remote client
+
+    if (target_id == my_local_player_id)
+    {
+      // Target is the host (local) - use SQ queue
+      Net_ToSQClient((int)target_id, name_str, (float)val);
+    }
+    else if (target_id >= 0 && target_id < MAX_PLAYERS && users[target_id].peer)
+    {
+      // Target is a remote client - send over ENet
+      Net_ToCPPClient(users[target_id].peer, name_str, (float)val);
+    }
+    else if (target_id == -1)
+    {
+      // Broadcast to all clients
+      // Send to local SQ client if host exists
+      if (my_local_player_id >= 0)
+      {
+        Net_ToSQClient(my_local_player_id, name_str, (float)val);
+      }
+      // Send to all remote clients
+      for (int i = 0; i < users_count; i++)
+      {
+        if (users[i].peer && users[i].player_id != my_local_player_id)
+        {
+          Net_ToCPPClient(users[i].peer, name_str, (float)val);
+        }
+      }
+    }
   }
 
   return 0;
@@ -312,15 +348,41 @@ SQInteger sq_send_packet_vector3(HSQUIRRELVM vm)
     get(_SC("z"), z);
   }
 
+  Vector3 vec = {x, y, z};
+
   if (vm == client_vm)
   {
     // Client → Server CPP (over ENet)
-    Net_ToCPPServer(name_str, Vector3{x, y, z});
+    Net_ToCPPServer(name_str, vec);
   }
   else
   {
-    // Server SQ → Client SQ (via queue)
-    Net_ToSQClient((int)target_id, name_str, Vector3{x, y, z});
+    // Server is sending to a client
+    if (target_id == my_local_player_id)
+    {
+      // Target is the host (local) - use SQ queue
+      Net_ToSQClient((int)target_id, name_str, vec);
+    }
+    else if (target_id >= 0 && target_id < MAX_PLAYERS && users[target_id].peer)
+    {
+      // Target is a remote client - send over ENet
+      Net_ToCPPClient(users[target_id].peer, name_str, vec);
+    }
+    else if (target_id == -1)
+    {
+      // Broadcast to all clients
+      if (my_local_player_id >= 0)
+      {
+        Net_ToSQClient(my_local_player_id, name_str, vec);
+      }
+      for (int i = 0; i < users_count; i++)
+      {
+        if (users[i].peer && users[i].player_id != my_local_player_id)
+        {
+          Net_ToCPPClient(users[i].peer, name_str, vec);
+        }
+      }
+    }
   }
 
   return 0;
@@ -1014,7 +1076,13 @@ Returns the current number of connected players.
 */
 SQInteger sq_get_player_count(HSQUIRRELVM vm)
 {
-  sq_pushinteger(vm, users_count);
+  int count = 0;
+  for (auto &obj : gameobjects)
+  {
+    if (obj->client_id >= 0)
+      count++;
+  }
+  sq_pushinteger(vm, count);
   return 1;
 };
 
@@ -2005,29 +2073,71 @@ static HSQUIRRELVM sqSetupVM(const char *side_name)
   // ----- Server-only table -----
   if (std::string(side_name) == "SERVER")
   {
-    sq_pushstring(v, _SC("server"), -1);
-    sq_newtable(v);
-
+    // network
     sq_register_func(v, sq_start_server, "start_server");
+    sq_register_func(v, sq_sendflags_sync, "sendflags_sync");
+
+    // instances
+    sq_register_func(v, sq_get_player_count, "get_player_count");
     sq_register_func(v, sq_instance_create, "instance_create");
     sq_register_func(v, sq_instances_get, "instances_get_all");
     sq_register_func(v, sq_instances_get, "instances_get");
     sq_register_func(v, sq_instances_get, "get_instance_count");
     sq_register_func(v, sq_get_player_instance, "get_player_instance");
-    sq_register_func(v, sq_get_player_count, "get_player_count");
-    sq_register_func(v, sq_sendflags_sync, "sendflags_sync");
-
-    sq_newslot(v, -3, SQFalse);
   }
 
-  // ----- SIDE constant -----
+  // ----- Client-only table -----
+  if (std::string(side_name) == "CLIENT")
+  {
+    // network
+    sq_register_func(v, sq_connect_to_server, "connect_to_server");
+
+    // cursor
+    sq_register_func(v, sq_show_cursor, "show_cursor");
+    sq_register_func(v, sq_hide_cursor, "hide_cursor");
+    sq_register_func(v, sq_is_cursor_hidden, "is_cursor_hidden");
+    sq_register_func(v, sq_enable_cursor, "enable_cursor");
+    sq_register_func(v, sq_disable_cursor, "disable_cursor");
+    sq_register_func(v, sq_is_cursor_on_screen, "is_cursor_on_screen");
+
+    // drawing
+    sq_register_func(v, sq_draw_fps, "draw_fps");
+    sq_register_func(v, sq_clear_background, "clear_background");
+    sq_register_func(v, sq_begin_scissor_mode, "begin_scissor_mode");
+    sq_register_func(v, sq_end_scissor_mode, "end_scissor_mode");
+
+    // window
+    sq_register_func(v, sq_toggle_fullscreen, "toggle_fullscreen");
+    sq_register_func(v, sq_toggle_borderless_windowed, "toggle_borderless_windowed");
+    sq_register_func(v, sq_maximize_window, "maximize_window");
+    sq_register_func(v, sq_minimize_window, "minimize_window");
+    sq_register_func(v, sq_restore_window, "restore_window");
+    sq_register_func(v, sq_set_window_icon, "set_window_icon");
+    sq_register_func(v, sq_set_window_title, "set_window_title");
+    sq_register_func(v, sq_set_window_position, "set_window_position");
+    sq_register_func(v, sq_get_screen_width, "get_screen_width");
+    sq_register_func(v, sq_get_screen_height, "get_screen_height");
+    sq_register_func(v, sq_get_render_width, "get_render_width");
+    sq_register_func(v, sq_get_render_height, "get_render_height");
+
+    // rtext
+    sq_register_func(v, sq_load_font, "load_font");
+    sq_register_func(v, sq_draw_text, "draw_text");
+
+    // rshapes
+    sq_register_func(v, sq_draw_rectangle, "draw_rectangle");
+
+    // rmodels
+    sq_register_func(v, sq_draw_cube, "draw_cube");
+  };
+
+  // ----- SIDE constant  | Returns CLIENT OR SERVER -----
   sq_pushstring(v, "SIDE", -1);
   sq_pushstring(v, side_name, -1);
   sq_newslot(v, -3, SQFalse);
 
   // ----- Global functions (both sides) -----
   // networking
-  sq_register_func(v, sq_connect_to_server, "connect_to_server");
   sq_register_func(v, sq_send_packet_number, "send_packet_number");
   sq_register_func(v, sq_send_packet_vector3, "send_packet_vector3");
   sq_register_func(v, sq_get_packet, "get_packet");
@@ -2063,32 +2173,6 @@ static HSQUIRRELVM sqSetupVM(const char *side_name)
 
   // system
   sq_register_func(v, sq_get_camera_position, "get_camera_position");
-  sq_register_func(v, sq_toggle_fullscreen, "toggle_fullscreen");
-  sq_register_func(v, sq_toggle_borderless_windowed, "toggle_borderless_windowed");
-  sq_register_func(v, sq_maximize_window, "maximize_window");
-  sq_register_func(v, sq_minimize_window, "minimize_window");
-  sq_register_func(v, sq_restore_window, "restore_window");
-  sq_register_func(v, sq_set_window_icon, "set_window_icon");
-  sq_register_func(v, sq_set_window_title, "set_window_title");
-  sq_register_func(v, sq_set_window_position, "set_window_position");
-  sq_register_func(v, sq_get_screen_width, "get_screen_width");
-  sq_register_func(v, sq_get_screen_height, "get_screen_height");
-  sq_register_func(v, sq_get_render_width, "get_render_width");
-  sq_register_func(v, sq_get_render_height, "get_render_height");
-
-  // cursor funcs
-  sq_register_func(v, sq_show_cursor, "show_cursor");
-  sq_register_func(v, sq_hide_cursor, "hide_cursor");
-  sq_register_func(v, sq_is_cursor_hidden, "is_cursor_hidden");
-  sq_register_func(v, sq_enable_cursor, "enable_cursor");
-  sq_register_func(v, sq_disable_cursor, "disable_cursor");
-  sq_register_func(v, sq_is_cursor_on_screen, "is_cursor_on_screen");
-
-  // drawing
-  sq_register_func(v, sq_draw_fps, "draw_fps");
-  sq_register_func(v, sq_clear_background, "clear_background");
-  sq_register_func(v, sq_begin_scissor_mode, "begin_scissor_mode");
-  sq_register_func(v, sq_end_scissor_mode, "end_scissor_mode");
 
   // timing
   sq_register_func(v, sq_set_target_fps, "set_target_fps");
@@ -2099,16 +2183,6 @@ static HSQUIRRELVM sqSetupVM(const char *side_name)
   // rng
   sq_register_func(v, sq_set_random_seed, "set_random_seed");
   sq_register_func(v, sq_get_random_value, "get_random_value");
-
-  // rtext
-  sq_register_func(v, sq_load_font, "load_font");
-  sq_register_func(v, sq_draw_text, "draw_text");
-
-  // rshapes
-  sq_register_func(v, sq_draw_rectangle, "draw_rectangle");
-
-  // rmodels
-  sq_register_func(v, sq_draw_cube, "draw_cube");
 
   sq_pop(v, 1);
   return v;
@@ -2159,6 +2233,7 @@ void sqUpdate(float dt)
 
   // Defer client init() until server has assigned our player ID
   static bool sq_client_init_done = false;
+  bool has_id = (my_local_player_id >= 0);
   if (!sq_client_init_done && global_client_init_called)
   {
     sqRunFunc(client_vm, "init");

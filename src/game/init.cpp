@@ -2,6 +2,8 @@
 #include <camera3d.h>
 #include <sq.h>
 #include <cfg_parser.h>
+#include <bsp.h>
+#include <rlImGui.h>
 
 void Init()
 {

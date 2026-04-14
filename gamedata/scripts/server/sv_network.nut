@@ -8,27 +8,28 @@ packet_funcs <- {
 	},
 
 	// set_sendflags
-	sendflags_sync = function (packet) {
-		server.sendflags_sync(packet.client_id, packet.value);
+	on_sendflags_sync = function (packet) {
+		sendflags_sync(packet.client_id, packet.value);
 	},
 
 	// get_position
 	get_position = function (packet) {
-		local me = server.get_player_instance(packet.client_id);
+		local me = get_player_instance(packet.client_id);
 		local pos = me.get_position();
 		send_packet_vector3(packet.client_id, "get_position", pos);
 	},
 
 	// set_position
 	set_position = function (packet) {
-		local me = server.get_player_instance(packet.client_id);
+		local me = get_player_instance(packet.client_id);
 		me.set_position(packet.value);
 	},
 
 	// get_player_count
-	get_player_count = function (packet) {
-		local total_players = server.get_player_count();
-		send_packet_number(packet.client_id, "get_player_count", total_players);
+	cs_get_player_count = function (packet) {
+		local total_players = get_player_count();
+		print("total players: " + total_players + "\n");
+		send_packet_number(packet.client_id, "cs_get_player_count", total_players);
 	},
 
 };

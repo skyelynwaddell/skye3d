@@ -7,12 +7,13 @@
 #undef far
 #endif
 #include <global.h>
+#include <engine.h>
 #include <cstdint>
 #include <string>
 #include <sq.h>
-#include <raylib.h>
-#include <player.h>
 #include "server_handlers.h"
+#include "net_utils.h"
+#include <format>
 
 ENetHost *server;
 ENetAddress address;
@@ -30,7 +31,6 @@ int enetserver_init()
   if (enet_initialize() != 0)
   {
     fprintf(stderr, "[SERVER]: ENet initialization failed.\n");
-    CloseWindow();
     return false;
   }
   atexit(enet_deinitialize);
@@ -45,7 +45,6 @@ int enetserver_init()
   if (!server)
   {
     fprintf(stderr, "[SERVER]: Failed to create ENet server host.\n");
-    CloseWindow();
     return false;
   }
 
@@ -79,7 +78,7 @@ void enetserver_process_message(ENetEvent *event)
 
   // Validate sender
   int sender_id = GetPlayerID();
-  printf("[SERVER DEBUG]: Packet from sender_id %d\n", sender_id);
+  // printf("[SERVER DEBUG]: Packet from sender_id %d\n", sender_id);
 
   if (sender_id < 0 || sender_id >= MAX_PLAYERS)
   {
@@ -151,7 +150,7 @@ void enetserver_process_message(ENetEvent *event)
     auto it = vec3_handlers.find(name);
     if (it != vec3_handlers.end())
     {
-      printf("[SERVER]: Handling vec3 packet '%s' from player %d\n", name.c_str(), sender_id);
+      // printf("[SERVER]: Handling vec3 packet '%s' from player %d\n", name.c_str(), sender_id);
       it->second(sender_id, payload, payload_len);
     }
     else
