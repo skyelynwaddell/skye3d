@@ -4,6 +4,7 @@
 in vec3 fragPosition;
 in vec2 fragTexCoord;
 in vec3 fragNormal;
+in vec4 fragColor;        // baked lightmap brightness interpolated across the triangle
 
 // Input uniform values
 uniform sampler2D texture0;
@@ -43,9 +44,12 @@ void main()
 	// Texel color fetching from texture sampler
 	vec4 texelColor = texture(texture0, fragTexCoord);
 	vec3 normal = normalize(fragNormal);
-	vec3 ambient = vec3(0.01);
 
-	vec3 lightDot = vec3(0.0);
+	// Baked lightmap is the primary static light source
+	// fragColor carries the greyscale brightness sampled at each vertex
+	vec3 lighting = fragColor.rgb;
+
+	// Dynamic lights are additive on top of the baked lightmap
 	for (int i = 0; i < MAX_LIGHTS; i++)
 	{
 		if (lights[i].enabled == 1)
@@ -65,12 +69,11 @@ void main()
 			}
 
 			float NdotL = abs(dot(normal, light_direction)) * Attenuate(light_distance);
-			lightDot += lights[i].color.rgb * NdotL;
+			lighting += lights[i].color.rgb * NdotL;
 		}
 	}
 
-	finalColor  = texelColor * vec4(lightDot, 1);
-	finalColor += texelColor * vec4(ambient, 1);
+	finalColor = texelColor * vec4(lighting, 1.0);
 
 	// Gamma correction
 	finalColor = pow(finalColor, vec4(1.0/2.2));

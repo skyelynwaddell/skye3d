@@ -4,6 +4,7 @@
 in vec3 vertexPosition;
 in vec2 vertexTexCoord;
 in vec3 vertexNormal;
+in vec4 vertexColor;      // baked lightmap brightness (RGBA, greyscale)
 
 // Input uniform values
 uniform mat4 mvp;
@@ -21,7 +22,8 @@ void main()
 	// Send vertex attributes to fragment shader
 	fragPosition = vertexPosition;
 	fragTexCoord = vertexTexCoord;
-	fragNormal = normalize(vec3(matNormal * vec4(vertexNormal, 1)));
+	fragNormal   = normalize(vec3(matNormal * vec4(vertexNormal, 1)));
+	fragColor    = vertexColor;   // carry lightmap to fragment stage
 
 	// Calculate final vertex position
 	gl_Position = mvp * vec4(vertexPosition, 1);

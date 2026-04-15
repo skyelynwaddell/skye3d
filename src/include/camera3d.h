@@ -11,7 +11,7 @@ inline std::unique_ptr<Camera> camera;
 inline long shaderModTime;
 inline Shader shader;
 inline Light cameraLight;
-inline int lightPower = 10;
+inline int lightPower = 50;
 
 static bool HandleMouseCursorActive()
 {

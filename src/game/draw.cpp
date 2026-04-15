@@ -16,7 +16,7 @@ void Draw()
   ClearBackground(GRAY);
   BeginMode3D(*camera);
 
-  BSP_Draw(shader, enable_wireframe);
+  BSP_Draw(shader, enable_wireframe, camera->position);
   GameObject3D_DrawAll();
 
   EndMode3D();

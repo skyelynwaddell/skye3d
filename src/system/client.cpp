@@ -326,6 +326,7 @@ void enetclient_update()
           auto obj = InstanceCreate<Player>(spawnpos);
           obj->client_id = my_local_player_id;
           obj->is_me = true;
+          camera->position = obj->position;
           users[my_local_player_id].object_ref = obj;
           users[my_local_player_id].player_id = my_local_player_id;
         }

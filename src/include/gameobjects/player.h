@@ -37,18 +37,24 @@ public:
     }
 
     float dt = GetFrameTime();
+
+    // Calculate basis vectors for movement (horizontal only)
     Vector3 forward = {sinf(global_cam_yaw), 0.f, -cosf(global_cam_yaw)};
     Vector3 right = {cosf(global_cam_yaw), 0.f, sinf(global_cam_yaw)};
 
-    Vector3 wish = {0, 0, 0};
+    // Gather raw input magnitudes (Quake uses +/- 320 for moves)
+    float fmove = 0.0f;
+    float smove = 0.0f;
+    const float quake_speed = 320.0f;
+
     if (IsKeyDown(KEY_W))
-      wish = Vector3Add(wish, forward);
+      fmove += quake_speed;
     if (IsKeyDown(KEY_S))
-      wish = Vector3Subtract(wish, forward);
+      fmove -= quake_speed;
     if (IsKeyDown(KEY_D))
-      wish = Vector3Add(wish, right);
+      smove += quake_speed;
     if (IsKeyDown(KEY_A))
-      wish = Vector3Subtract(wish, right);
+      smove -= quake_speed;
 
     if (IsGamepadAvailable(0))
     {
@@ -56,35 +62,30 @@ public:
       float moveX = GetGamepadAxisMovement(0, GAMEPAD_AXIS_LEFT_X);
       float moveY = GetGamepadAxisMovement(0, GAMEPAD_AXIS_LEFT_Y);
       if (fabsf(moveX) > deadzone)
-        wish = Vector3Add(wish, Vector3Scale(right, moveX));
+        smove = moveX * quake_speed;
       if (fabsf(moveY) > deadzone)
-        wish = Vector3Add(wish, Vector3Scale(forward, -moveY));
+        fmove = -moveY * quake_speed;
     }
 
-    float len = Vector3Length(wish);
-    if (len > 1.0f)
-      wish = Vector3Scale(wish, 1.0f / len);
+    // Handle Jump: In Quake, jumping is an instantaneous velocity change
+    // We check grounding before we move for the frame
+    bool grounded = bsp_collider.IsGrounded();
+    const float jump_vel = 8.0f; // Scale this as needed for your world
 
-    // Horizontal
-    Vector3 target_h = Vector3Scale(wish, speed);
-    velocity.x = Lerp(velocity.x, target_h.x, acceleration * dt);
-    velocity.z = Lerp(velocity.z, target_h.z, acceleration * dt);
-
-    // Gravity + jump
-    const float gravity = 20.0f;
-    const float jump_vel = 8.0f;
-    bool grounded = bsp_collider.IsGrounded(position, collision_box);
-    if (grounded && velocity.y <= 0.f)
-      velocity.y = 0.f;
-    else
-      velocity.y -= gravity * dt;
-
-    if (grounded && IsKeyPressed(KEY_SPACE))
+    if (grounded && (IsKeyPressed(KEY_SPACE) || IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN)))
+    {
       velocity.y = jump_vel;
-    if (grounded && IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN))
-      velocity.y = jump_vel;
+    }
 
-    position = bsp_collider.MoveAndSlide(position, velocity, collision_box, dt);
+    position = bsp_collider.MoveAndSlide(position, velocity, forward, right, fmove, smove, dt);
+
+    Vector3 viewDir = {
+        sinf(global_cam_yaw) * cosf(global_cam_pitch),
+        sinf(global_cam_pitch),
+        -cosf(global_cam_yaw) * cosf(global_cam_pitch)};
+
+    camera->position = (Vector3){position.x, position.y + 0.5f, position.z};
+    camera->target = Vector3Add(camera->position, viewDir);
   };
 
   /*
@@ -156,7 +157,15 @@ public:
       UpdateInputMode();
       PlayerMovement();
       if (camera)
-        camera->position = {position.x, position.y + 1.5f, position.z};
+      {
+        // Horizontal snappy
+        camera->position.x = position.x;
+        camera->position.z = position.z;
+
+        // Vertical Lerpy for stairs
+        float camlerp = 20.0f * GetFrameTime();
+        camera->position.y = Lerp(camera->position.y, position.y + 1.5f, camlerp);
+      }
       CameraFollowPlayer();
       SyncClientServer();
     }
@@ -168,6 +177,8 @@ public:
   */
   void Draw() override
   {
+    if (client_id == my_local_player_id)
+      return;
     GameObject3D::Draw();
   };
 

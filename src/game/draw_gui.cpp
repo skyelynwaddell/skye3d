@@ -2,6 +2,7 @@
 #include <camera3d.h>
 #include <sq.h>
 #include <gameobject3d.h>
+#include <bsp.h>
 
 void DrawGUI()
 {
@@ -42,6 +43,8 @@ void DrawGUI()
 
   if (global_draw_fps)
     DrawFPS(global_fps_x, global_fps_y);
+
+  BSP_DrawDebug(camera->position);
 
   EndDrawing();
 };

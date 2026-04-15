@@ -61,6 +61,29 @@ obj.helloworld();
 
 ```
 
+### [SH] Shared
+
+```cpp
+// Variables
+string SIDE; // returns either CLIENT or SERVER side depending on if user is host
+
+// Networking
+void send_packet_number(int client_id, string event_name, float data); // sends a packet to Server or Client
+void send_packet_vector3(int client_id, string event_name, Vector3 data); // sends a packet to Server or Client
+Packet get_packet(); // returns a Packet object {client_id, name, data} when received from Server or Client
+
+// Timing
+void set_target_fps(int target_fps); // set the windows target fps (doesn't mean fps will be it)
+float get_frame_time(); // delta time
+float get_time(); // returns current time of pc
+float get_fps(); // returns current fps game is running at
+
+// RNG
+void set_random_seed(int new_seed); // sets a new random seed of choice
+int get_random_value(int min, int max) // returns an inclusive range of min-max
+
+```
+
 ### [CL] Client Side
 
 ```cpp
@@ -118,6 +141,9 @@ void enable_cursor(); // enable cursor
 void disable_cursor(); // disable cursor
 bool is_cursor_on_screen(); // returns true if the mouse cursor is currently on screen
 
+// System
+Vector3 get_camera_position(); // Gets the 3d camera's x y z position
+
 // Drawing
 void clear_background(Color color); // clears background with a Color [ie. COLOR.GOLD]
 void begin_scissor_mode(int x, int y, int width, int height); // begin scissor mode
@@ -132,32 +158,6 @@ void draw_rectangle(int x, int y, int width, int height, Color color); // draws 
 
 // RModels
 void draw_cube(float x, float y, float z, float width, float height, float length);
-
-```
-
-### [SH] Shared
-
-```cpp
-// Variables
-string side_name; // returns either CLIENT or SERVER side depending on if user is host
-
-// Networking
-void send_packet_number(int client_id, string event_name, float data); // sends a packet to Server or Client
-void send_packet_vector3(int client_id, string event_name, Vector3 data); // sends a packet to Server or Client
-Packet get_packet(); // returns a Packet object {client_id, name, data} when received from Server or Client
-
-// System
-Vector3 get_camera_position(); // Gets the 3d camera's x y z position
-
-// Timing
-void set_target_fps(int target_fps); // set the windows target fps (doesn't mean fps will be it)
-float get_frame_time(); // delta time
-float get_time(); // returns current time of pc
-float get_fps(); // returns current fps game is running at
-
-// RNG
-void set_random_seed(int new_seed); // sets a new random seed of choice
-int get_random_value(int min, int max) // returns an inclusive range of min-max
 
 ```
 

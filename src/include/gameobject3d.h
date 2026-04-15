@@ -40,8 +40,8 @@ public:
   std::string target = "";
   Vector3 velocity = {0.0f, 0.0f, 0.0f};
   Vector3 position = {0.0f, 0.0f, 0.0f};
-  Vector3 collision_box = {1.6f, 2.8f, 1.6f};
-  Vector3 size = {1.0f, 1.3f, 1.0f};
+  Vector3 collision_box = {0.5f, 0.6f, 0.5f};
+  Vector3 size = {0.5f, 0.6f, 0.5f};
   float speed = 10.0f;
   float acceleration = 20.0f;
   int sendflags = 0;
@@ -52,7 +52,17 @@ public:
 
   // overrides
   virtual void Update() {};
-  virtual void Draw() {};
+  virtual void Draw()
+  {
+
+    if (global_show_collisions)
+    {
+      Vector3 drawPos = {position.x, position.y + collision_box.y * 0.08f, position.z};
+
+      DrawCube(drawPos, collision_box.x, collision_box.y, collision_box.z, RED);
+      DrawCubeWires(drawPos, collision_box.x, collision_box.y, collision_box.z, MAROON);
+    }
+  };
   virtual void DrawGUI() {};
   virtual void CleanUp() {};
 };
@@ -107,16 +117,7 @@ Draw all objects
 inline void GameObject3D_DrawAll()
 {
   GameLoop("draw", [&](size_t i)
-           {
-             gameobjects[i]->Draw();
-             if (global_show_collisions)
-             {
-  Vector3 drawPos = {gameobjects[i]->position.x, gameobjects[i]->position.y + gameobjects[i]->collision_box.y * 0.08f, gameobjects[i]->position.z};
-
-  DrawCube(drawPos, gameobjects[i]->collision_box.x, gameobjects[i]->collision_box.y, gameobjects[i]->collision_box.z, RED);
-  DrawCubeWires(drawPos, gameobjects[i]->collision_box.x, gameobjects[i]->collision_box.y, gameobjects[i]->collision_box.z, MAROON);
-
-             } });
+           { gameobjects[i]->Draw(); });
 };
 
 /*

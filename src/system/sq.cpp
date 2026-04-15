@@ -2129,6 +2129,9 @@ static HSQUIRRELVM sqSetupVM(const char *side_name)
     sq_register_func(v, sq_disable_cursor, "disable_cursor");
     sq_register_func(v, sq_is_cursor_on_screen, "is_cursor_on_screen");
 
+    // system
+    sq_register_func(v, sq_get_camera_position, "get_camera_position");
+
     // drawing
     sq_register_func(v, sq_draw_fps, "draw_fps");
     sq_register_func(v, sq_clear_background, "clear_background");
@@ -2170,9 +2173,6 @@ static HSQUIRRELVM sqSetupVM(const char *side_name)
   sq_register_func(v, sq_send_packet_number, "send_packet_number");
   sq_register_func(v, sq_send_packet_vector3, "send_packet_vector3");
   sq_register_func(v, sq_get_packet, "get_packet");
-
-  // system
-  sq_register_func(v, sq_get_camera_position, "get_camera_position");
 
   // timing
   sq_register_func(v, sq_set_target_fps, "set_target_fps");

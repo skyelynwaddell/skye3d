@@ -43,6 +43,7 @@ void SpawnPlayer(int id)
   auto obj = InstanceCreate<Player>({-50, 0, 5});
   obj->client_id = id;
   obj->is_me = (id == my_local_player_id);
+  camera->position = obj->position;
   users[id].object_ref = obj;
 };
 
