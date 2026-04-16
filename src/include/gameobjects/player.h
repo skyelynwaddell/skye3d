@@ -38,23 +38,21 @@ public:
 
     float dt = GetFrameTime();
 
-    // Calculate basis vectors for movement (horizontal only)
     Vector3 forward = {sinf(global_cam_yaw), 0.f, -cosf(global_cam_yaw)};
     Vector3 right = {cosf(global_cam_yaw), 0.f, sinf(global_cam_yaw)};
 
-    // Gather raw input magnitudes (Quake uses +/- 320 for moves)
     float fmove = 0.0f;
     float smove = 0.0f;
-    const float quake_speed = 320.0f;
+    const float spd = 200.0f;
 
     if (IsKeyDown(KEY_W))
-      fmove += quake_speed;
+      fmove += spd;
     if (IsKeyDown(KEY_S))
-      fmove -= quake_speed;
+      fmove -= spd;
     if (IsKeyDown(KEY_D))
-      smove += quake_speed;
+      smove += spd;
     if (IsKeyDown(KEY_A))
-      smove -= quake_speed;
+      smove -= spd;
 
     if (IsGamepadAvailable(0))
     {
@@ -62,22 +60,12 @@ public:
       float moveX = GetGamepadAxisMovement(0, GAMEPAD_AXIS_LEFT_X);
       float moveY = GetGamepadAxisMovement(0, GAMEPAD_AXIS_LEFT_Y);
       if (fabsf(moveX) > deadzone)
-        smove = moveX * quake_speed;
+        smove = moveX * spd;
       if (fabsf(moveY) > deadzone)
-        fmove = -moveY * quake_speed;
+        fmove = -moveY * spd;
     }
 
-    // Handle Jump: In Quake, jumping is an instantaneous velocity change
-    // We check grounding before we move for the frame
-    bool grounded = bsp_collider.IsGrounded();
-    const float jump_vel = 8.0f; // Scale this as needed for your world
-
-    if (grounded && (IsKeyPressed(KEY_SPACE) || IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN)))
-    {
-      velocity.y = jump_vel;
-    }
-
-    position = bsp_collider.MoveAndSlide(position, velocity, forward, right, fmove, smove, dt);
+    position = bsp_collider.MoveAndSlide(position, velocity, forward, right, fmove, smove);
 
     Vector3 viewDir = {
         sinf(global_cam_yaw) * cosf(global_cam_pitch),

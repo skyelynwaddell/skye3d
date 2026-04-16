@@ -343,7 +343,7 @@ inline Entity ReadEntity(std::istream &stream)
 FromQuake
 Converts .bsp xyz coords to raylib coords
 */
-static inline float bsp_raylib_scale = 0.05f;
+inline float bsp_raylib_scale = 0.05f;
 static inline Vector3 FromQuake(Vector3 quakeVec)
 {
   return Vector3Scale({quakeVec.y, quakeVec.z, quakeVec.x}, bsp_raylib_scale);
@@ -386,7 +386,13 @@ struct BSP_File
 
     std::vector<Entity> entities{};
     while (bsp_file.tellg() < header.entities.offset + header.entities.size)
+    {
+      bsp_file >> std::ws; // skip whitespace
+      int next = bsp_file.peek();
+      if (next == EOF || next != '{')
+        break;
       entities.push_back(ReadEntity(bsp_file));
+    }
 
     return entities;
   }
@@ -1233,33 +1239,29 @@ struct BSP_Collider
   ClipVelocity
   clips scaled velocity
   */
-  static inline float test_len = 0.02f;
+#define STOP_EPS 0.1
   int ClipVelocity(Vector3 in, Vector3 normal, Vector3 &out, float overbounce)
   {
-    float backoff;
     int blocked = 0;
 
-    if (normal.y > 0)
-      blocked |= 1; // floor
-    if (normal.y == 0)
-      blocked |= 2; // wall/step
+    if (normal.y > 0.7)
+      blocked |= 1;
+    if (fabsf(normal.y) < 0.7f)
+      blocked |= 2;
 
-    backoff = Vector3DotProduct(in, normal) * overbounce;
+    float backoff = Vector3DotProduct(in, normal) * overbounce;
 
     out.x = in.x - (normal.x * backoff);
     out.y = in.y - (normal.y * backoff);
     out.z = in.z - (normal.z * backoff);
 
-    if ((blocked & 2) && out.y > in.y)
-      out.y = in.y;
-
-    float eps = 0.001f * bsp_raylib_scale;
-    if (fabsf(out.x) < eps)
-      out.x = 0.0f;
-    if (fabsf(out.y) < eps)
-      out.y = 0.0f;
-    if (fabsf(out.z) < eps)
-      out.z = 0.0f;
+    float eps = STOP_EPS * bsp_raylib_scale;
+    if (out.x > -STOP_EPS && out.x < STOP_EPS)
+      out.x = 0;
+    if (out.y > -STOP_EPS && out.y < STOP_EPS)
+      out.y = 0;
+    if (out.z > -STOP_EPS && out.z < STOP_EPS)
+      out.z = 0;
 
     return blocked;
   };
@@ -1270,35 +1272,46 @@ struct BSP_Collider
   */
   void NudgePosition(Vector3 &player_pos)
   {
-    // try pushing up first - most common case
-    for (int i = 1; i <= 32; i++)
+    // // only nudge if actually stuck
+    // if (!IsSolid(player_pos))
+    //   return;
+
+    // // try upward escape first with increasing steps
+    // for (int i = 1; i <= 8; i++)
+    // {
+    //   Vector3 test = {player_pos.x, player_pos.y + i * 0.125f * bsp_raylib_scale, player_pos.z};
+    //   if (!IsSolid(test))
+    //   {
+    //     player_pos = test;
+    //     return;
+    //   }
+    // }
+
+    // small nudge distance — just enough to escape the surface
+    const float nudge = 0.125f * bsp_raylib_scale;
+
+    // try cardinal directions first, prioritize up
+    static const Vector3 dirs[] = {
+        {0, 1, 0}, // up first
+        {0, -1, 0},
+        {1, 0, 0},
+        {-1, 0, 0},
+        {0, 0, 1},
+        {0, 0, -1},
+    };
+
+    for (auto &d : dirs)
     {
-      Vector3 test = {player_pos.x, player_pos.y + i * bsp_raylib_scale, player_pos.z};
+      Vector3 test = {
+          player_pos.x + d.x * nudge,
+          player_pos.y + d.y * nudge,
+          player_pos.z + d.z * nudge};
       if (!IsSolid(test))
       {
         player_pos = test;
         return;
       }
     }
-
-    // then try all directions
-    static const float sign[3] = {0.0f, -1.0f, 1.0f};
-    const float nudge = 0.5f * bsp_raylib_scale;
-
-    for (int z = 0; z < 3; z++)
-      for (int x = 0; x < 3; x++)
-        for (int y = 0; y < 3; y++)
-        {
-          Vector3 test = {
-              player_pos.x + sign[x] * nudge,
-              player_pos.y + sign[y] * nudge,
-              player_pos.z + sign[z] * nudge};
-          if (!IsSolid(test))
-          {
-            player_pos = test;
-            return;
-          }
-        }
   }
 
   /*
@@ -1307,7 +1320,7 @@ struct BSP_Collider
   */
   void CategorizePosition(Vector3 &pos, Vector3 &vel, bool &is_grounded)
   {
-    if (vel.y > 180.0f * bsp_raylib_scale)
+    if (vel.y > 0.1f)
     {
       is_grounded = false;
       return;
@@ -1331,7 +1344,7 @@ struct BSP_Collider
   ApplyFriction
   applies friction the player movement
   */
-  void ApplyFriction(Vector3 &pos, Vector3 &vel, bool is_grounded, float dt)
+  void ApplyFriction(Vector3 &pos, Vector3 &vel, bool is_grounded)
   {
     float speed = Vector3Length(vel);
 
@@ -1366,7 +1379,7 @@ struct BSP_Collider
     if (is_grounded)
     {
       float control = (speed < stop_speed) ? stop_speed : speed;
-      drop = control * friction * dt;
+      drop = control * friction * GetFrameTime();
     }
 
     float new_speed = speed - drop;
@@ -1376,7 +1389,7 @@ struct BSP_Collider
     new_speed /= speed;
 
     vel.x *= new_speed;
-    vel.y *= new_speed;
+    // vel.y *= new_speed;
     vel.z *= new_speed;
   };
 
@@ -1384,7 +1397,7 @@ struct BSP_Collider
   Accelerate
   Handles acceleration whilst on the ground
   */
-  void Accelerate(Vector3 wishdir, float wishspeed, float accel, Vector3 &vel, float dt)
+  void Accelerate(Vector3 wishdir, float wishspeed, float accel, Vector3 &vel)
   {
     float currentspeed = Vector3DotProduct(vel, wishdir);
     float addspeed = wishspeed - currentspeed;
@@ -1392,7 +1405,7 @@ struct BSP_Collider
     if (addspeed <= 0)
       return;
 
-    float accelspeed = accel * dt * wishspeed;
+    float accelspeed = accel * GetFrameTime() * wishspeed;
 
     if (accelspeed > addspeed)
       accelspeed = addspeed;
@@ -1406,7 +1419,7 @@ struct BSP_Collider
   AirAccelerate
   Handles acceleration whilst in the air
   */
-  void AirAccelerate(Vector3 wishdir, float wishspeed, float accel, Vector3 &vel, float dt)
+  void AirAccelerate(Vector3 wishdir, float wishspeed, float accel, Vector3 &vel)
   {
     float wishspd = (wishspeed > 30.0f * bsp_raylib_scale) ? (30.0f * bsp_raylib_scale) : wishspeed;
 
@@ -1416,7 +1429,7 @@ struct BSP_Collider
     if (addspeed <= 0)
       return;
 
-    float accelspeed = accel * wishspeed * dt;
+    float accelspeed = accel * wishspeed * GetFrameTime();
     if (accelspeed > addspeed)
       accelspeed = addspeed;
 
@@ -1429,14 +1442,14 @@ struct BSP_Collider
   FlyMove
   Handles Movement Physics for a GameObject in 3D Space
   */
-  int FlyMove(Vector3 &pos, Vector3 &vel, float dt)
+  int FlyMove(Vector3 &pos, Vector3 &vel)
   {
     Vector3 planes[5];
     int numplanes = 0;
     Vector3 original_velocity = vel;
     Vector3 primal_velocity = vel;
     int blocked = 0;
-    float time_left = dt;
+    float time_left = GetFrameTime();
 
     for (int bumpcount = 0; bumpcount < 4; bumpcount++)
     {
@@ -1455,7 +1468,7 @@ struct BSP_Collider
       if (tr.all_solid)
       {
         NudgePosition(pos);
-        break;
+        return 3;
       }
 
       if (tr.started_solid)
@@ -1478,7 +1491,7 @@ struct BSP_Collider
 
       if (tr.normal.y > 0.7f)
         blocked |= 1; // floor
-      if (tr.normal.y == 0.0f)
+      if (fabsf(tr.normal.y) < 0.7f)
         blocked |= 2; // wall/Step
 
       time_left *= (1.0f - tr.fraction);
@@ -1489,45 +1502,47 @@ struct BSP_Collider
         break;
       }
 
-      planes[numplanes++] = tr.normal;
+      planes[numplanes] = tr.normal;
+      numplanes++;
 
       int i, j;
       for (i = 0; i < numplanes; i++)
       {
         // clip velocity against plane
-        ClipVelocity(vel, planes[i], vel, 1.0f); // 1.01 helps push out
+        ClipVelocity(original_velocity, planes[i], vel, 1.0f); // 1.01 helps push out
 
         // check if hits OTHER planes
         for (j = 0; j < numplanes; j++)
-        {
           if (j != i)
           {
             if (Vector3DotProduct(vel, planes[j]) < 0)
               break; // hits another plane
           }
-        }
         if (j == numplanes)
-        {
           break; // found a direction that clears all planes
-        }
       }
 
-      // we are in a corner
-      if (i == numplanes && numplanes == 2)
+      if (i != numplanes)
       {
-        Vector3 dir = Vector3CrossProduct(planes[0], planes[1]);
-        dir = Vector3Normalize(dir);
-        float d = Vector3DotProduct(dir, primal_velocity);
-        if (d > 0)
-          vel = Vector3Scale(dir, d);
-        else
+      }
+      else
+      {
+        if (numplanes != 2)
         {
           vel = {0, 0, 0};
           break;
         }
+        Vector3 dir = Vector3CrossProduct(planes[0], planes[1]);
+        float d = Vector3DotProduct(dir, vel);
+        dir = Vector3Scale(vel, d);
+      }
+
+      if (Vector3DotProduct(vel, primal_velocity) <= 0)
+      {
+        vel = {0, 0, 0};
+        break;
       }
     }
-
     return blocked;
   };
 
@@ -1535,42 +1550,51 @@ struct BSP_Collider
   GroundMove
   Handles ground physics for player (accel,frict, etc)
   */
-  void GroundMove(Vector3 &pos, Vector3 &vel, float dt)
+  void GroundMove(Vector3 &pos, Vector3 &vel)
   {
     Vector3 original_pos = pos;
     Vector3 original_vel = vel;
-    float step_height = 18.0f * bsp_raylib_scale;
+    if (vel.y < 0)
+      vel.y = 0;
 
-    vel.y = 0;
+    float step_height = 19.f * bsp_raylib_scale; // 18.0f * bsp_raylib_scale;
 
     // try just moving to final dest
     Vector3 direct_dest = {
-        pos.x + vel.x * dt,
+        pos.x + vel.x * GetFrameTime(),
         pos.y,
-        pos.z + vel.z * dt};
+        pos.z + vel.z * GetFrameTime()};
     TraceResult direct_tr = TraceLine(pos, direct_dest);
 
     if (direct_tr.fraction == 1.0f)
     {
       pos = direct_dest; // no walls, keep moving
-
       Vector3 down_dest = {pos.x, pos.y - step_height, pos.z};
       TraceResult down_tr = TraceLine(pos, down_dest);
       if (down_tr.fraction < 1.0f && down_tr.normal.y > 0.7f)
       {
-        // Snap to the step below
         pos.y -= step_height * down_tr.fraction;
-        // add the skin offset so we sit just above, not inside
         pos.y += 0.03125f * bsp_raylib_scale;
       }
       return;
     }
 
+    // if the horizontal trace hit a floor/slope (not a wall), just slide — don't step
+    if (direct_tr.normal.y > 0.7f)
+    {
+      FlyMove(pos, vel);
+      return;
+    }
+
     // hit wall , try step up
     // first get slide result
-    FlyMove(pos, vel, dt);
+    int slide_blocked = FlyMove(pos, vel);
     Vector3 slide_pos = pos;
     Vector3 slide_vel = vel;
+
+    // only step up if slide actually hit a wall, not just a floor/slope
+    if (!(slide_blocked & 2))
+      return;
 
     pos = original_pos;
     vel = original_vel;
@@ -1585,7 +1609,7 @@ struct BSP_Collider
     }
 
     // step forward (slide in air)
-    FlyMove(pos, vel, dt);
+    FlyMove(pos, vel);
 
     // step down (to floor)
     Vector3 step_pos = {};
@@ -1593,6 +1617,7 @@ struct BSP_Collider
     Vector3 dest_down = {air_finish_pos.x, air_finish_pos.y - step_height, air_finish_pos.z};
     TraceResult tr_down = TraceLine(air_finish_pos, dest_down);
     float slide_dist_sq, step_dist_sq;
+    bool stepped_up;
 
     // if we land on wall/steep slop ignore this
     if (tr_down.normal.y < 0.7f)
@@ -1600,8 +1625,8 @@ struct BSP_Collider
 
     if (!tr_down.started_solid)
     {
-      pos.y -= step_height * 2.0f * tr_down.fraction;
-      pos.y += 0.03125f * bsp_raylib_scale; // skin
+      pos.y = air_finish_pos.y - step_height * tr_down.fraction;
+      pos.y += 0.03125f * bsp_raylib_scale;
     }
 
     step_pos = pos;
@@ -1609,6 +1634,10 @@ struct BSP_Collider
     {
       slide_dist_sq = powf(slide_pos.x - original_pos.x, 2) + powf(slide_pos.z - original_pos.z, 2);
       step_dist_sq = powf(step_pos.x - original_pos.x, 2) + powf(step_pos.z - original_pos.z, 2);
+
+      stepped_up = (step_pos.y > original_pos.y + 0.01f * bsp_raylib_scale);
+      if (step_dist_sq < 0.0001f || !stepped_up)
+        goto usedown;
 
       if (slide_dist_sq >= step_dist_sq)
       {
@@ -1648,17 +1677,29 @@ struct BSP_Collider
 
     const float gravity = 800.0f * bsp_raylib_scale;
 
-    if (is_grounded)
+    if (is_grounded && vel.y <= 0)
     {
-      Accelerate(wishdir, wishspeed, 10.0f, vel, GetFrameTime());
+      Accelerate(wishdir, wishspeed, 10.0f, vel);
       vel.y -= gravity * GetFrameTime();
-      GroundMove(pos, vel, GetFrameTime());
+      GroundMove(pos, vel);
     }
     else
     {
-      AirAccelerate(wishdir, wishspeed, 1.0f, vel, GetFrameTime());
+      AirAccelerate(wishdir, wishspeed, 1.0f, vel);
       vel.y -= gravity * GetFrameTime();
-      FlyMove(pos, vel, GetFrameTime());
+      FlyMove(pos, vel);
+    }
+  };
+
+  /*
+
+  */
+  void PlayerJump(Vector3 &vel, bool is_grounded)
+  {
+    if (is_grounded && (IsKeyPressed(KEY_SPACE) || IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN)))
+    {
+      vel.y = 270.0f * bsp_raylib_scale;
+      printf("JUMP! vel.y = %.2f, grounded = %d\n", vel.y, is_grounded);
     }
   };
 
@@ -1667,14 +1708,15 @@ struct BSP_Collider
   Call on a players position (after moving) to detect bsp collisions
   */
   static inline bool is_grounded = false;
-  Vector3 MoveAndSlide(Vector3 pos, Vector3 &vel, Vector3 forward, Vector3 right, float fmove, float smove, float dt)
+  Vector3 MoveAndSlide(Vector3 pos, Vector3 &vel, Vector3 forward, Vector3 right, float fmove, float smove)
   {
     is_grounded = false;
 
     NudgePosition(pos);
     CategorizePosition(pos, vel, is_grounded);
-    ApplyFriction(pos, vel, is_grounded, GetFrameTime());
+    ApplyFriction(pos, vel, is_grounded);
     AirMove(pos, vel, forward, right, fmove, smove);
+    PlayerJump(vel, is_grounded);
     CategorizePosition(pos, vel, is_grounded);
 
     return pos;

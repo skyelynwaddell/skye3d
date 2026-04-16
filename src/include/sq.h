@@ -2,6 +2,7 @@
 #pragma once
 #include <squirrel.h>
 #include <string>
+#include <unordered_map>
 #include "fonts.h"
 
 inline HSQUIRRELVM client_vm = nullptr;
@@ -140,6 +141,9 @@ SQInteger sq_draw_rectangle(HSQUIRRELVM vm);
 
 // rmodels
 SQInteger sq_draw_cube(HSQUIRRELVM vm);
+
+void sqCallEntitySpawner(const std::string &classname, Vector3 origin, const std::unordered_map<std::string, std::string> &tags);
+void sqSpawnBSPEntities();
 
 void sqRunFunc(HSQUIRRELVM vm, const char *func_name, float dt = -1.0f);
 void sqPrintFunc_Server(HSQUIRRELVM /*vm*/, const SQChar *s, ...);

@@ -19,6 +19,7 @@
 #include <string>
 #include <variant>
 #include <unordered_map>
+#include <bsp.h>
 
 static inline std::string GAMEDATA_PATH = "gamedata/";
 
@@ -1712,6 +1713,100 @@ void sqCompilerErrorHandler(HSQUIRRELVM /*v*/, const SQChar *desc, const SQChar 
 // -----------------------------------------------------------------------
 // Script Loading
 // -----------------------------------------------------------------------
+
+// -----------------------------------------------------------------------
+// BSP Entity Spawning
+// -----------------------------------------------------------------------
+
+/*
+sqCallEntitySpawnerInVM
+Calls a BSP entity spawner function in a specific VM if it exists.
+*/
+static void sqCallEntitySpawnerInVM(HSQUIRRELVM vm, const std::string &classname, Vector3 origin, const std::unordered_map<std::string, std::string> &tags)
+{
+  if (!vm)
+    return;
+
+  sq_pushroottable(vm);
+  sq_pushstring(vm, classname.c_str(), -1);
+
+  if (SQ_FAILED(sq_get(vm, -2)))
+  {
+    sq_pop(vm, 1);
+    return;
+  }
+
+  sq_pushroottable(vm); // this
+
+  // arg 1: origin table {x, y, z}
+  sq_newtable(vm);
+  sq_pushstring(vm, "x", -1);
+  sq_pushfloat(vm, origin.x);
+  sq_newslot(vm, -3, SQFalse);
+  sq_pushstring(vm, "y", -1);
+  sq_pushfloat(vm, origin.y);
+  sq_newslot(vm, -3, SQFalse);
+  sq_pushstring(vm, "z", -1);
+  sq_pushfloat(vm, origin.z);
+  sq_newslot(vm, -3, SQFalse);
+
+  // arg 2: tags table
+  sq_newtable(vm);
+  for (auto &[key, val] : tags)
+  {
+    sq_pushstring(vm, key.c_str(), -1);
+    sq_pushstring(vm, val.c_str(), -1);
+    sq_newslot(vm, -3, SQFalse);
+  }
+
+  sq_call(vm, 3, SQFalse, SQTrue);
+  sq_pop(vm, 2);
+};
+
+/*
+sqCallEntitySpawner
+Calls matching BSP entity function in server VM (game logic)
+then client VM (visuals).
+*/
+void sqCallEntitySpawner(const std::string &classname, Vector3 origin, const std::unordered_map<std::string, std::string> &tags)
+{
+  sqCallEntitySpawnerInVM(server_vm, classname, origin, tags);
+  sqCallEntitySpawnerInVM(client_vm, classname, origin, tags);
+};
+
+/*
+sqSpawnBSPEntities
+Call after loading a BSP map. Iterates all entities and calls
+any matching Squirrel function found in the client VM.
+*/
+void sqSpawnBSPEntities()
+{
+  if (!bsp_renderer.bsp_file)
+    return;
+
+  auto entities = bsp_renderer.bsp_file->entities();
+
+  for (auto &e : entities)
+  {
+    auto class_it = e.tags.find("classname");
+    if (class_it == e.tags.end())
+      continue;
+
+    const std::string &classname = class_it->second;
+
+    // parse origin from quake space
+    Vector3 origin = {0, 0, 0};
+    auto org = e.tags.find("origin");
+    if (org != e.tags.end())
+    {
+      float qx = 0, qy = 0, qz = 0;
+      sscanf(org->second.c_str(), "%f %f %f", &qx, &qy, &qz);
+      origin = FromQuake({qx, qy, qz});
+    }
+
+    sqCallEntitySpawner(classname, origin, e.tags);
+  }
+};
 
 /*
 sqLoadNutFile

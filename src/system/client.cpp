@@ -86,6 +86,8 @@ int enetclient_connect(const char *host, unsigned short port)
       {
         printf("[CLIENT]: Connected to server %s:%u\n", host, port);
         global_client_init_called = true;
+        sqSpawnBSPEntities();
+
         return true;
       }
     }
@@ -329,6 +331,7 @@ void enetclient_update()
           camera->position = obj->position;
           users[my_local_player_id].object_ref = obj;
           users[my_local_player_id].player_id = my_local_player_id;
+
         }
 
         enet_packet_destroy(event.packet);
