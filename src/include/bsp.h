@@ -1,7 +1,6 @@
 // BSP Single Header File
 #pragma once
 #include <ctime>
-#include <config.h>
 #include <raylib.h>
 #include <raymath.h>
 #include <rlgl.h>
@@ -1534,7 +1533,7 @@ struct BSP_Collider
         }
         Vector3 dir = Vector3CrossProduct(planes[0], planes[1]);
         float d = Vector3DotProduct(dir, vel);
-        dir = Vector3Scale(vel, d);
+        vel = Vector3Scale(vel, d);
       }
 
       if (Vector3DotProduct(vel, primal_velocity) <= 0)
