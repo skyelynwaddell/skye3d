@@ -50,4 +50,8 @@ endif()
 target_compile_definitions(game PRIVATE
 	MAP_SOURCE_DIR="${CMAKE_SOURCE_DIR}/gamedata/maps"
 	VS_PATH="${CMAKE_SOURCE_DIR}/gamedata/shaders/330/lighting.vert"
-	FS_PATH="${CMAKE_SOURCE_DIR}/gamedata/shaders/330/lighting.frag")
+	FS_PATH="${CMAKE_SOURCE_DIR}/gamedata/shaders/330/lighting.frag"
+	PP_VS_PATH="${CMAKE_SOURCE_DIR}/gamedata/shaders/330/postprocess.vert"
+	BLOOM_EXTRACT_FS_PATH="${CMAKE_SOURCE_DIR}/gamedata/shaders/330/bloom_extract.frag"
+	BLUR_FS_PATH="${CMAKE_SOURCE_DIR}/gamedata/shaders/330/blur.frag"
+	COMPOSITE_FS_PATH="${CMAKE_SOURCE_DIR}/gamedata/shaders/330/composite.frag")

@@ -46,14 +46,7 @@ void main()
 	vec3 normal = normalize(fragNormal);
 
 	// Baked lightmap
-	float lm = fragColor.r;
-	vec3 lighting = vec3(lm) * 2.5;
-
-	// Tint the lightmap warm — brighter areas get more amber
-	vec3 warmLight = vec3(1.0, 0.75, 0.5);        // amber tint
-	vec3 coolLight = vec3(0.7, 0.8, 1.0);          // blueish shadow tint
-	vec3 lightTint = mix(coolLight, warmLight, smoothstep(0.0, 0.6, lm));
-	lighting *= lightTint;
+	vec3 lighting = fragColor.rgb * 2.0;
 
 	// Dynamic lights are additive on top of the baked lightmap
 	for (int i = 0; i < MAX_LIGHTS; i++)
@@ -79,30 +72,6 @@ void main()
 		}
 	}
 
-	// Base lit color
-	vec3 litColor = texelColor.rgb * lighting;
-
-	// Fake bloom — bright areas bleed warm light
-	float brightness = dot(litColor, vec3(0.2126, 0.7152, 0.0722));
-	float bloom = max(brightness - 0.3, 0.0) * 0.7;
-	litColor += bloom * vec3(1.0, 0.7, 0.4);      // strong amber bloom
-
-	// Glow boost — bright spots get extra intensity
-	float glow = smoothstep(0.3, 1.0, brightness);
-	litColor = mix(litColor, litColor * 1.5, glow);
-
-	// Ambient — warm-tinted so shadows feel atmospheric, not dead grey
-	litColor += texelColor.rgb * vec3(0.06, 0.04, 0.03);
-
-	// Color grade — push midtones warm, increase saturation
-	vec3 grey = vec3(dot(litColor, vec3(0.2126, 0.7152, 0.0722)));
-	litColor = mix(grey, litColor, 1.25);          // boost saturation 25%
-
-	finalColor = vec4(litColor, texelColor.a);
-
-	// Tone mapping (Reinhard) — keeps brights from clipping harshly
-	finalColor.rgb = finalColor.rgb / (finalColor.rgb + vec3(1.0));
-
-	// Gamma correction
-	finalColor = pow(finalColor, vec4(1.0/2.2));
+	// Final scene color — post-processing handles bloom, tone mapping, color grading
+	finalColor = vec4(texelColor.rgb * lighting, texelColor.a);
 }

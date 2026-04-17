@@ -22,6 +22,7 @@ void Init()
   sqStartClient();
   try
   {
+    bsp_renderer.texture_filter = global_texture_filter;
     models = LoadModelsFromBSPFile(global_map_to_load);
   }
   catch (...)

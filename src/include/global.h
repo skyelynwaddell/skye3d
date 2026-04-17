@@ -20,3 +20,11 @@ inline bool global_show_collisions = true;
 inline bool global_draw_fps = false;
 inline float global_fps_x = 0.0f;
 inline float global_fps_y = 0.0f;
+
+// RL_TEXTURE_FILTER_POINT = 0,        // No filter, just pixel approximation
+// RL_TEXTURE_FILTER_BILINEAR = 1,         // Linear filtering
+// RL_TEXTURE_FILTER_TRILINEAR = 2,        // Trilinear filtering (linear with mipmaps)
+// RL_TEXTURE_FILTER_ANISOTROPIC_4X = 3,   // Anisotropic filtering 4x
+// RL_TEXTURE_FILTER_ANISOTROPIC_8X = 4,   // Anisotropic filtering 8x
+// RL_TEXTURE_FILTER_ANISOTROPIC_16X = 5,  // Anisotropic filtering 16x
+inline int global_texture_filter = 2;

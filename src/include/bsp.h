@@ -17,6 +17,19 @@
 
 inline std::vector<Model> models;
 
+inline Shader default_shader;
+inline Shader invisible_shader;
+
+inline Shader liquid_shader;
+inline int liquid_time_loc;
+
+inline Shader sky_shader;
+inline int sky_time_loc;
+inline int sky_campos_loc;
+
+inline float SLOPE_MAX = 0.4f;   // max slope angle we can walk up
+inline float SLOPE_BOOST = 0.7f; // allows so we arent inching up slopes
+
 // -----------------------------------------------------------------------
 // ReadT Helpers
 // The _read<T> helper function uses these offsets to
@@ -699,6 +712,9 @@ struct BSP_Renderer
   int cluster_count = 0;                                      // num of clusters
   bool has_pvs = true;                                        // enable/disable pvs
 
+  // texture filter
+  int texture_filter = 0;
+
   // pvs debug
   int last_draw_count = 0;
   int total_model_count = 0;
@@ -722,6 +738,16 @@ builds sections (clusters) of models seperated up for better lookup when culling
   {
     std::unordered_map<int, std::unordered_map<std::string, std::vector<Face>>> by_vis;
     std::unordered_map<int, std::set<int>> processed;
+
+    default_shader = LoadShader(VS_PATH, FS_PATH);
+    invisible_shader = LoadShader("gamedata/shaders/330/invisible.vs", "gamedata/shaders/330/invisible.fs");
+
+    liquid_shader = LoadShader("gamedata/shaders/330/water.vs", "gamedata/shaders/330/water.fs");
+    liquid_time_loc = GetShaderLocation(liquid_shader, "time");
+
+    sky_shader = LoadShader("gamedata/shaders/330/sky.vs", "gamedata/shaders/330/sky.fs");
+    sky_time_loc = GetShaderLocation(sky_shader, "time");
+    sky_campos_loc = GetShaderLocation(sky_shader, "cameraPos");
 
     for (int leaf_id = 1; leaf_id < (int)all_leaves.size(); leaf_id++)
     {
@@ -754,6 +780,30 @@ builds sections (clusters) of models seperated up for better lookup when culling
         auto tex_it = textures.find(texname);
         if (tex_it != textures.end())
           model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = tex_it->second;
+
+        // Check what TEXNAME it is to do special cool stuff with it
+        bool is_liquid = texname.at(0) == '*';
+        bool is_sky = texname.starts_with("sky");
+        bool is_invisible = (texname.starts_with("clip") || texname.starts_with("trigger"));
+
+        // set corresponding shader
+        if (is_liquid)
+        {
+          model.materials[0].shader = liquid_shader;
+        }
+        else if (is_sky)
+        {
+          model.materials[0].shader = sky_shader;
+          Texture2D &skytex = model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture;
+          SetTextureWrap(skytex, TEXTURE_WRAP_REPEAT);
+          SetTextureFilter(skytex, TEXTURE_FILTER_BILINEAR);
+        }
+        else if (is_invisible)
+        {
+          model.materials[0].shader = invisible_shader;
+        }
+        else
+          model.materials[0].shader = default_shader;
 
         cluster_models[vis_key].push_back(model);
       }
@@ -886,18 +936,21 @@ builds sections (clusters) of models seperated up for better lookup when culling
               .format = PIXELFORMAT_UNCOMPRESSED_R8G8B8,
           };
           textures[texname] = LoadTextureFromImage(texture_image);
+          GenTextureMipmaps(&textures[texname]);
+          SetTextureFilter(textures[texname], texture_filter);
         }
       }
     }
 
     // build models for all faces (for fallback rendering)
-    for (auto &[texname, faces] : faces_by_texture)
-    {
-      Mesh mesh = GenMeshFaces(*bsp_file, faces);
-      Model model = LoadModelFromMesh(mesh);
-      model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = textures[texname];
-      all_models.push_back(model);
-    }
+    // for (auto &[texname, faces] : faces_by_texture)
+    // {
+    //   Mesh mesh = GenMeshFaces(*bsp_file, faces);
+    //   Model model = LoadModelFromMesh(mesh);
+
+    //   model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = textures[texname];
+    //   all_models.push_back(model);
+    // }
   };
 
   /*
@@ -981,6 +1034,10 @@ builds sections (clusters) of models seperated up for better lookup when culling
   void DrawWithPVS(Shader &shader, Vector3 camera_pos, bool enable_wireframe)
   {
     last_draw_count = 0;
+    float current_time = (float)GetTime();
+    SetShaderValue(liquid_shader, liquid_time_loc, &current_time, SHADER_UNIFORM_FLOAT);
+    SetShaderValue(sky_shader, sky_time_loc, &current_time, SHADER_UNIFORM_FLOAT);
+    SetShaderValue(sky_shader, sky_campos_loc, &camera_pos, SHADER_UNIFORM_VEC3);
 
     int current_leaf = FindLeaf(camera_pos);
     std::set<int> visible_vis_keys = GetVisibleLeaves(current_leaf);
@@ -993,18 +1050,16 @@ builds sections (clusters) of models seperated up for better lookup when culling
 
       for (Model &model : it->second)
       {
-        model.materials[0].shader = shader;
         DrawModel(model, {}, 1.f, WHITE);
         last_draw_count++;
 
         if (enable_wireframe)
         {
-          model.materials[0].shader = {rlGetShaderIdDefault(), rlGetShaderLocsDefault()};
           DrawModelWires(model, {}, 1.f, BLACK);
         }
       }
     }
-  };
+  }
 
   /*
   DrawAll
@@ -1231,9 +1286,9 @@ struct BSP_Collider
   {
     int blocked = 0;
 
-    if (normal.y > 0.7)
+    if (normal.y > SLOPE_MAX)
       blocked |= 1;
-    if (fabsf(normal.y) < 0.7f)
+    if (fabsf(normal.y) < SLOPE_MAX)
       blocked |= 2;
 
     float backoff = Vector3DotProduct(in, normal) * overbounce;
@@ -1295,7 +1350,7 @@ struct BSP_Collider
   */
   void CategorizePosition(Vector3 &pos, Vector3 &vel, bool &is_grounded)
   {
-    if (vel.y > 0.1f)
+    if (vel.y > 50.0f * bsp_raylib_scale)
     {
       is_grounded = false;
       return;
@@ -1305,7 +1360,7 @@ struct BSP_Collider
     Vector3 point_down = {pos.x, pos.y - down_dist, pos.z};
     TraceResult tr = TraceLine(pos, point_down);
 
-    if (tr.fraction == 1.0f || tr.normal.y < 0.7f)
+    if (tr.fraction == 1.0f || tr.normal.y < SLOPE_MAX)
     {
       is_grounded = false; // too steep
     }
@@ -1465,9 +1520,9 @@ struct BSP_Collider
       if (tr.fraction == 1.0f)
         break; // finished the move
 
-      if (tr.normal.y > 0.7f)
+      if (tr.normal.y > SLOPE_MAX)
         blocked |= 1; // floor
-      if (fabsf(tr.normal.y) < 0.7f)
+      if (fabsf(tr.normal.y) < SLOPE_MAX)
         blocked |= 2; // wall/Step
 
       time_left *= (1.0f - tr.fraction);
@@ -1485,7 +1540,7 @@ struct BSP_Collider
       for (i = 0; i < numplanes; i++)
       {
         // clip velocity against plane
-        float bounce = (planes[i].y > 0.7f) ? 1.0f : 1.01f;
+        float bounce = (planes[i].y > SLOPE_MAX) ? 1.0f : 1.01f;
         ClipVelocity(original_velocity, planes[i], vel, bounce); // 1.01 helps push out of walls and not get snagged
 
         // check if hits OTHER planes
@@ -1548,7 +1603,7 @@ struct BSP_Collider
       pos = direct_dest; // no walls, keep moving
       Vector3 down_dest = {pos.x, pos.y - step_height, pos.z};
       TraceResult down_tr = TraceLine(pos, down_dest);
-      if (down_tr.fraction < 1.0f && down_tr.normal.y > 0.7f)
+      if (down_tr.fraction < 1.0f && down_tr.normal.y > SLOPE_MAX)
       {
         pos.y -= step_height * down_tr.fraction;
         pos.y += 0.03125f * bsp_raylib_scale;
@@ -1557,9 +1612,11 @@ struct BSP_Collider
     }
 
     // if the horizontal trace hit a floor/slope (not a wall), just slide — don't step
-    if (direct_tr.normal.y > 0.7f)
+    if (direct_tr.normal.y > SLOPE_MAX)
     {
+      vel.y = Vector3Length({vel.x, 0, vel.z}) * SLOPE_BOOST; // SLOPE BOOST
       FlyMove(pos, vel);
+      vel.y = 0; // don't carry upward slope velocity into next frame's ground check
       return;
     }
 
@@ -1597,7 +1654,7 @@ struct BSP_Collider
     bool stepped_up;
 
     // if we land on wall/steep slop ignore this
-    if (tr_down.normal.y < 0.7f)
+    if (tr_down.normal.y < SLOPE_MAX)
       goto usedown;
 
     if (!tr_down.started_solid)
@@ -1686,7 +1743,7 @@ struct BSP_Collider
       float step = 18.0f * bsp_raylib_scale;
       Vector3 down = {pos.x, pos.y - step, pos.z};
       TraceResult tr = TraceLine(pos, down);
-      if (tr.fraction < 1.0f && tr.normal.y > 0.7f)
+      if (tr.fraction < 1.0f && tr.normal.y > SLOPE_MAX)
       {
         pos.y -= step * tr.fraction;
         pos.y += 0.03125f * bsp_raylib_scale;

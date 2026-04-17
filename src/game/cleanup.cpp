@@ -6,6 +6,10 @@
 void CleanUp()
 {
   UnloadShader(shader);
+  UnloadShader(pp_bloom_extract);
+  UnloadShader(pp_blur);
+  UnloadShader(pp_composite);
+  PostProcess_DestroyFBOs();
   BSP_CleanUp();
   rlImGuiShutdown();
 };
