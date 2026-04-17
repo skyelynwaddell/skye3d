@@ -49,9 +49,6 @@ handles mouse yaw and pitch
   {
     Vector2 direction = {0.0f, 0.0f};
 
-    if (IsMenuMode)
-      return;
-
     auto UpdateStack = [](int key, std::vector<int> &stack)
     {
       if (IsKeyPressed(key))
@@ -135,6 +132,11 @@ updates camera position, yaw, and pitch
 
     if (!IsMenuMode)
       GetInput(fmove, smove);
+    else
+    {
+      vertical_stack.clear();
+      horizontal_stack.clear();
+    }
 
     position = bsp_collider.MoveAndSlide(position, velocity, forward, right, fmove, smove);
 

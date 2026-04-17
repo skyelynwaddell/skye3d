@@ -703,14 +703,33 @@ struct PVS
 
 struct BSP_Renderer
 {
+  // vertex range in texturebatch vbo for a cluster
+  struct VisRange
+  {
+    int offset;
+    int count;
+  };
+
+  // One GPU mesh per unique texture.
+  // cluster_ranges maps vis_key (vertex_offset, vertex_count) within that mesh
+  // rlDrawVertexArray(range.offset, range.count) draws only the visible portion.
+  struct TextureBatch
+  {
+    Mesh mesh = {}; // used for sub-range draws
+    Texture2D texture = {};
+    Shader shader = {};
+    int tex_loc = -1;                                 // cached texture sampler uniform location
+    std::unordered_map<int, VisRange> cluster_ranges; // vis_key -> vertex range
+  };
+
   // BSP data
   std::unique_ptr<std::ifstream> file_stream;
   std::unique_ptr<BSP_File> bsp_file;
-  std::vector<Model> all_models;                              // models for not pvs rendering
-  std::unordered_map<int, std::vector<Model>> cluster_models; // cluster_id -> draw list
-  int bsp_root_node = 0;                                      // root node index
-  int cluster_count = 0;                                      // num of clusters
-  bool has_pvs = true;                                        // enable/disable pvs
+  std::vector<Model> all_models; // fallback (unused with texture batches)
+  std::vector<TextureBatch> texture_batches;
+  int bsp_root_node = 0;
+  int cluster_count = 0;
+  bool has_pvs = true;
 
   // texture filter
   int texture_filter = 0;
@@ -723,7 +742,7 @@ struct BSP_Renderer
   PVS pvs;
   std::vector<Node> all_nodes;
   std::vector<Leaf> all_leaves;
-  std::unordered_map<int, int> leaf_to_cluster; // maps leaf index to cluster index
+  std::unordered_map<int, int> leaf_to_cluster;
 
   // face and texture data
   std::unordered_map<std::string, std::vector<Face>> faces_by_texture;
@@ -736,18 +755,17 @@ builds sections (clusters) of models seperated up for better lookup when culling
 */
   void BuildClusterModels()
   {
-    std::unordered_map<int, std::unordered_map<std::string, std::vector<Face>>> by_vis;
-    std::unordered_map<int, std::set<int>> processed;
-
     default_shader = LoadShader(VS_PATH, FS_PATH);
     invisible_shader = LoadShader("gamedata/shaders/330/invisible.vs", "gamedata/shaders/330/invisible.fs");
-
     liquid_shader = LoadShader("gamedata/shaders/330/water.vs", "gamedata/shaders/330/water.fs");
     liquid_time_loc = GetShaderLocation(liquid_shader, "time");
-
     sky_shader = LoadShader("gamedata/shaders/330/sky.vs", "gamedata/shaders/330/sky.fs");
     sky_time_loc = GetShaderLocation(sky_shader, "time");
     sky_campos_loc = GetShaderLocation(sky_shader, "cameraPos");
+
+    // group faces
+    std::unordered_map<std::string, std::unordered_map<int, std::vector<Face>>> by_tex_cluster;
+    std::unordered_map<int, std::set<int>> processed;
 
     for (int leaf_id = 1; leaf_id < (int)all_leaves.size(); leaf_id++)
     {
@@ -764,54 +782,160 @@ builds sections (clusters) of models seperated up for better lookup when culling
         Face face = bsp_file->face(face_id);
         TexInfo texinfo = bsp_file->texinfo(face.texinfo_id);
         Miptex miptex = bsp_file->miptex(texinfo.miptex_id);
-        std::string texname = std::string(miptex.name);
-
-        by_vis[vis_key][texname].push_back(face);
+        by_tex_cluster[std::string(miptex.name)][vis_key].push_back(face);
       }
     }
 
-    for (auto &[vis_key, faces_by_tex] : by_vis)
+    // adds bsp face's triangles into arrays of verts
+    auto append_face = [&](
+                           const Face &face,
+                           std::vector<Vector3> &verts,
+                           std::vector<Vector2> &tcs,
+                           std::vector<Vector3> &norms,
+                           std::vector<uint8_t> &cols)
     {
-      for (auto &[texname, faces] : faces_by_tex)
+      TexInfo texinfo = bsp_file->texinfo(face.texinfo_id);
+      Miptex miptex = bsp_file->miptex(texinfo.miptex_id);
+
+      std::vector<Vector3> fv;
+      std::vector<Vector2> ftc, fst;
+
+      for (size_t i = 0; i < face.ledge_num; ++i)
       {
-        Mesh mesh = GenMeshFaces(*bsp_file, faces);
-        Model model = LoadModelFromMesh(mesh);
-
-        auto tex_it = textures.find(texname);
-        if (tex_it != textures.end())
-          model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = tex_it->second;
-
-        // Check what TEXNAME it is to do special cool stuff with it
-        bool is_liquid = texname.at(0) == '*';
-        bool is_sky = texname.starts_with("sky");
-        bool is_invisible = (texname.starts_with("clip") || texname.starts_with("trigger"));
-
-        // set corresponding shader
-        if (is_liquid)
-        {
-          model.materials[0].shader = liquid_shader;
-        }
-        else if (is_sky)
-        {
-          model.materials[0].shader = sky_shader;
-          Texture2D &skytex = model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture;
-          SetTextureWrap(skytex, TEXTURE_WRAP_REPEAT);
-          SetTextureFilter(skytex, TEXTURE_FILTER_BILINEAR);
-        }
-        else if (is_invisible)
-        {
-          model.materials[0].shader = invisible_shader;
-        }
-        else
-          model.materials[0].shader = default_shader;
-
-        cluster_models[vis_key].push_back(model);
+        int16_t ledge = bsp_file->listedge(face.ledge_id + i);
+        Edge edge = bsp_file->edge(labs(ledge));
+        Vector3 vertex = bsp_file->vertex(ledge >= 0 ? edge.vs : edge.ve);
+        fv.push_back(vertex);
+        float s = Vector3DotProduct(vertex, texinfo.u_axis) + texinfo.u_offset;
+        float t = Vector3DotProduct(vertex, texinfo.v_axis) + texinfo.v_offset;
+        fst.push_back({s, t});
+        ftc.push_back({s / (float)miptex.width, t / (float)miptex.height});
       }
+      if (fv.empty())
+        return;
+
+      BSP_File::FaceLightmapExtents lm_ext = bsp_file->face_lightmap_extents(face);
+      std::vector<uint8_t> lm_bytes = bsp_file->face_lightmap_bytes(face, lm_ext);
+
+      auto sample_lm = [&](float ls, float lt) -> uint8_t
+      {
+        if (lm_bytes.empty())
+          return 255;
+        ls = std::max(0.0f, std::min((float)(lm_ext.width - 1), ls));
+        lt = std::max(0.0f, std::min((float)(lm_ext.height - 1), lt));
+        int x0 = (int)ls, y0 = (int)lt;
+        int x1 = std::min(x0 + 1, lm_ext.width - 1);
+        int y1 = std::min(y0 + 1, lm_ext.height - 1);
+        float fx = ls - x0, fy = lt - y0;
+        float v = lm_bytes[y0 * lm_ext.width + x0] * (1 - fx) * (1 - fy) + lm_bytes[y0 * lm_ext.width + x1] * fx * (1 - fy) + lm_bytes[y1 * lm_ext.width + x0] * (1 - fx) * fy + lm_bytes[y1 * lm_ext.width + x1] * fx * fy;
+        return (uint8_t)std::min(255.0f, v);
+      };
+
+      for (size_t i = fv.size() - 2; i > 0; --i)
+      {
+        size_t i0 = fv.size() - 1, i1 = i, i2 = i - 1;
+        Vector3 v[3] = {FromQuake(fv[i0]), FromQuake(fv[i1]), FromQuake(fv[i2])};
+        verts.insert(verts.end(), std::begin(v), std::end(v));
+        tcs.push_back(ftc[i0]);
+        tcs.push_back(ftc[i1]);
+        tcs.push_back(ftc[i2]);
+        for (size_t j : {i0, i1, i2})
+        {
+          float ls = fst[j].x / 16.0f - (float)lm_ext.lm_mins_s;
+          float lt = fst[j].y / 16.0f - (float)lm_ext.lm_mins_t;
+          uint8_t b = sample_lm(ls, lt);
+          cols.push_back(b);
+          cols.push_back(b);
+          cols.push_back(b);
+          cols.push_back(255);
+        }
+        Vector3 n = VerticesNormal(v[0], v[1], v[2]);
+        norms.push_back(n);
+        norms.push_back(n);
+        norms.push_back(n);
+      }
+    };
+
+    // build texture batch per texture
+    for (auto &[texname, cluster_face_map] : by_tex_cluster)
+    {
+      std::vector<Vector3> verts;
+      std::vector<Vector2> tcs;
+      std::vector<Vector3> norms;
+      std::vector<uint8_t> cols;
+
+      TextureBatch batch;
+
+      // cluster order
+      std::vector<int> sorted_keys;
+      for (auto &[k, _] : cluster_face_map)
+        sorted_keys.push_back(k);
+      std::sort(sorted_keys.begin(), sorted_keys.end());
+
+      for (int vis_key : sorted_keys)
+      {
+        int range_start = (int)verts.size();
+        for (const Face &face : cluster_face_map[vis_key])
+          append_face(face, verts, tcs, norms, cols);
+        int range_count = (int)verts.size() - range_start;
+        if (range_count > 0)
+          batch.cluster_ranges[vis_key] = {range_start, range_count};
+      }
+
+      if (verts.empty())
+        continue;
+
+      // only 1 gpu upload for entire geometry baby
+      Mesh mesh{};
+      mesh.vertexCount = (int)verts.size();
+      mesh.vertices = (float *)verts.data();
+      mesh.texcoords = (float *)tcs.data();
+      mesh.normals = (float *)norms.data();
+      mesh.colors = cols.data();
+      UploadMesh(&mesh, false);
+
+      // replace with dummies so unloadmesh doesnt double free
+      mesh.vertices = (float *)malloc(1);
+      mesh.texcoords = (float *)malloc(1);
+      mesh.normals = (float *)malloc(1);
+      mesh.colors = (unsigned char *)malloc(4);
+      batch.mesh = mesh;
+
+      // Texture
+      auto tex_it = textures.find(texname);
+      if (tex_it != textures.end())
+        batch.texture = tex_it->second;
+
+      // Shader
+      bool is_liquid = texname.at(0) == '*';
+      bool is_sky = texname.starts_with("sky");
+      bool is_invisible = texname.starts_with("clip") || texname.starts_with("skip") || texname.starts_with("trigger");
+
+      if (is_liquid)
+        batch.shader = liquid_shader;
+      else if (is_sky)
+      {
+        batch.shader = sky_shader;
+        SetTextureWrap(batch.texture, TEXTURE_WRAP_REPEAT);
+        SetTextureFilter(batch.texture, TEXTURE_FILTER_BILINEAR);
+      }
+      else if (is_invisible)
+        batch.shader = invisible_shader;
+      else
+        batch.shader = default_shader;
+
+      // cache texture sampler location (sky uses "tex", others use "texture0")
+      batch.tex_loc = batch.shader.locs[SHADER_LOC_MAP_DIFFUSE];
+      if (batch.tex_loc == -1)
+        batch.tex_loc = GetShaderLocation(batch.shader, "tex");
+
+      texture_batches.push_back(std::move(batch));
     }
 
+    // total possible sub-range draws (cluster ranges across all texture batches)
     total_model_count = 0;
-    for (auto &[c, mlist] : cluster_models)
-      total_model_count += mlist.size();
+    for (auto &batch : texture_batches)
+      total_model_count += (int)batch.cluster_ranges.size();
   };
 
   /*
@@ -992,8 +1116,9 @@ builds sections (clusters) of models seperated up for better lookup when culling
     // fallback - show all
     auto show_all = [&]()
     {
-      for (auto &[vis_key, _] : cluster_models)
-        visible_vis_keys.insert(vis_key);
+      for (auto &batch : texture_batches)
+        for (auto &[vis_key, _] : batch.cluster_ranges)
+          visible_vis_keys.insert(vis_key);
     };
 
     if (current_leaf < 0 || current_leaf >= (int)all_leaves.size())
@@ -1020,9 +1145,10 @@ builds sections (clusters) of models seperated up for better lookup when culling
 
     // always include clusters with no PVS data (vis_id < 0)
     // these are non-solid leaves (triggers, water, etc.) that should always be drawn
-    for (auto &[vis_key, _] : cluster_models)
-      if (vis_key < 0)
-        visible_vis_keys.insert(vis_key);
+    for (auto &batch : texture_batches)
+      for (auto &[vis_key, _] : batch.cluster_ranges)
+        if (vis_key < 0)
+          visible_vis_keys.insert(vis_key);
 
     return visible_vis_keys;
   };
@@ -1042,22 +1168,49 @@ builds sections (clusters) of models seperated up for better lookup when culling
     int current_leaf = FindLeaf(camera_pos);
     std::set<int> visible_vis_keys = GetVisibleLeaves(current_leaf);
 
-    for (int vis_key : visible_vis_keys)
+    // MVP is constant for all batches this frame (geometry is already in world space)
+    Matrix matMVP = MatrixMultiply(rlGetMatrixModelview(), rlGetMatrixProjection());
+    float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    int slot = 0;
+
+    for (auto &batch : texture_batches)
     {
-      auto it = cluster_models.find(vis_key);
-      if (it == cluster_models.end())
-        continue;
+      // Bind shader and set per-frame uniforms
+      rlEnableShader(batch.shader.id);
 
-      for (Model &model : it->second)
+      if (batch.shader.locs[SHADER_LOC_MATRIX_MVP] != -1)
+        rlSetUniformMatrix(batch.shader.locs[SHADER_LOC_MATRIX_MVP], matMVP);
+
+      // matModel needed by sky.vs to compute world-space fragPosition.
+      // BSP geometry is already in world space so model = identity.
+      if (batch.shader.locs[SHADER_LOC_MATRIX_MODEL] != -1)
+        rlSetUniformMatrix(batch.shader.locs[SHADER_LOC_MATRIX_MODEL], MatrixIdentity());
+
+      if (batch.shader.locs[SHADER_LOC_COLOR_DIFFUSE] != -1)
+        rlSetUniform(batch.shader.locs[SHADER_LOC_COLOR_DIFFUSE], white, RL_SHADER_UNIFORM_VEC4, 1);
+
+      if (batch.tex_loc != -1 && batch.texture.id > 0)
       {
-        DrawModel(model, {}, 1.f, WHITE);
-        last_draw_count++;
+        rlActiveTextureSlot(0);
+        rlEnableTexture(batch.texture.id);
+        rlSetUniform(batch.tex_loc, &slot, RL_SHADER_UNIFORM_INT, 1);
+      }
 
-        if (enable_wireframe)
+      // Draw only the vertex ranges belonging to visible PVS clusters
+      rlEnableVertexArray(batch.mesh.vaoId);
+      for (auto &[vis_key, range] : batch.cluster_ranges)
+      {
+        if (visible_vis_keys.count(vis_key))
         {
-          DrawModelWires(model, {}, 1.f, BLACK);
+          rlDrawVertexArray(range.offset, range.count);
+          last_draw_count++;
         }
       }
+      rlDisableVertexArray();
+
+      if (batch.texture.id > 0)
+        rlDisableTexture();
+      rlDisableShader();
     }
   }
 
@@ -1106,10 +1259,10 @@ builds sections (clusters) of models seperated up for better lookup when culling
     leaf_to_cluster.clear();
     pvs.compressed_data.clear();
 
-    for (auto &[cluster, cluster_model_list] : cluster_models)
-      for (auto &model : cluster_model_list)
-        UnloadModel(model);
-    cluster_models.clear();
+    // unload texture batches (one mesh per texture)
+    for (auto &batch : texture_batches)
+      UnloadMesh(batch.mesh);
+    texture_batches.clear();
 
     bsp_file.reset();
     file_stream.reset();
@@ -1816,8 +1969,10 @@ BSP_DrawDebug
 */
 inline void BSP_DrawDebug(Vector3 camera_pos)
 {
-  DrawText(TextFormat("PVS draws : %d / %d", bsp_renderer.last_draw_count,
-                      bsp_renderer.total_model_count),
+  DrawText(TextFormat("PVS cluster draws: %d / %d  (%d tex batches)",
+                      bsp_renderer.last_draw_count,
+                      bsp_renderer.total_model_count,
+                      (int)bsp_renderer.texture_batches.size()),
            0, 20, 20, GREEN);
   DrawText(TextFormat("Leaf: %d  Cluster: %d",
                       bsp_renderer.FindLeaf(camera_pos),
