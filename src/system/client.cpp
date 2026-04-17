@@ -86,7 +86,6 @@ int enetclient_connect(const char *host, unsigned short port)
       {
         printf("[CLIENT]: Connected to server %s:%u\n", host, port);
         global_client_init_called = true;
-        sqSpawnBSPEntities();
 
         return true;
       }
@@ -324,14 +323,13 @@ void enetclient_update()
         if (!found)
         {
           // printf("[CLIENT]: Creating new object for player %d\n", my_local_player_id);
-          Vector3 spawnpos = {0, 0, 0};
-          auto obj = InstanceCreate<Player>(spawnpos);
+          auto data = InfoPlayerStart();
+          auto obj = InstanceCreate<Player>(data.origin);
           obj->client_id = my_local_player_id;
           obj->is_me = true;
           camera->position = obj->position;
           users[my_local_player_id].object_ref = obj;
           users[my_local_player_id].player_id = my_local_player_id;
-
         }
 
         enet_packet_destroy(event.packet);
@@ -364,4 +362,4 @@ void enetclient_update()
       enet_packet_destroy(event.packet);
     }
   }
-}
+};

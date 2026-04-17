@@ -51,6 +51,15 @@ function init() {
 
 function info_player_start(origin, tags)
 {
-	print("INFO_PLAYER_SPAWN : spawned at " + origin.x + " " + origin.y + " " + origin.z + "\n")
     // tags.targetname, tags.angle, etc. all available
+
+		local players = instances_get("player");
+		print(get_player_count());
+		foreach (i, player in players)
+		{
+			print("found player " + player.get_position())
+			player.set_position(origin.x, origin.y, origin.z);
+		}
+		print("INFO_PLAYER_SPAWN : spawned at " + origin.x + " " + origin.y + " " + origin.z + "\n");
+
 };

@@ -40,7 +40,8 @@ void SpawnPlayer(int id)
   }
 
   // Remote client — no object exists yet, create it
-  auto obj = InstanceCreate<Player>({-50, 0, 5});
+  auto data = InfoPlayerStart();
+  auto obj = InstanceCreate<Player>(data.origin);
   obj->client_id = id;
   obj->is_me = (id == my_local_player_id);
   camera->position = obj->position;

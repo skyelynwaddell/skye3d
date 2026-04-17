@@ -1,10 +1,45 @@
 // net_utils.h
 #pragma once
 #include "global.h"
+#include "bsp.h"
 #include "enet.h"
 #include <vector>
 #include <variant>
 #include <cstdint>
+
+typedef struct PlayerSpawnData
+{
+  Vector3 origin = {0, 0, 0};
+} PlayerSpawnData;
+
+inline PlayerSpawnData InfoPlayerStart()
+{
+  PlayerSpawnData data = {{0.0f, 0.0f, 0.0f}};
+
+  if (!bsp_renderer.bsp_file)
+    return data;
+
+  auto entities = bsp_renderer.bsp_file->entities();
+  for (auto &e : entities)
+  {
+    auto class_it = e.tags.find("classname");
+    if (class_it == e.tags.end() || class_it->second != "info_player_start")
+      continue;
+
+    auto org_it = e.tags.find("origin");
+    if (org_it != e.tags.end())
+    {
+      float qx = 0, qy = 0, qz = 0;
+      if (sscanf(org_it->second.c_str(), "%f %f %f", &qx, &qy, &qz) == 3)
+      {
+        data.origin = FromQuake({qx, qy, qz});
+        return data;
+      }
+    }
+  }
+
+  return data;
+}
 
 using PacketData = std::variant<int, float, std::string, bool, Vector3>;
 

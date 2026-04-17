@@ -1794,7 +1794,7 @@ void sqSpawnBSPEntities()
 
     const std::string &classname = class_it->second;
 
-    // parse origin from quake space
+    // parse origin
     Vector3 origin = {0, 0, 0};
     auto org = e.tags.find("origin");
     if (org != e.tags.end())
@@ -1804,6 +1804,7 @@ void sqSpawnBSPEntities()
       origin = FromQuake({qx, qy, qz});
     }
 
+    // Now do something with the data, spawn an instance, etc.
     sqCallEntitySpawner(classname, origin, e.tags);
   }
 };
@@ -2333,6 +2334,8 @@ void sqUpdate(float dt)
   {
     sqRunFunc(client_vm, "init");
     sq_client_init_done = true;
+
+    sqSpawnBSPEntities();
   }
 
   if (global_is_hosting)

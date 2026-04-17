@@ -23,7 +23,6 @@ void Init()
   try
   {
     models = LoadModelsFromBSPFile(global_map_to_load);
-    sqSpawnBSPEntities();
   }
   catch (...)
   {

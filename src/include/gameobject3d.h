@@ -42,7 +42,7 @@ public:
   Vector3 position = {0.0f, 0.0f, 0.0f};
   Vector3 collision_box = {0.5f, 0.6f, 0.5f};
   Vector3 size = {0.5f, 0.6f, 0.5f};
-  float speed = 10.0f;
+  float speed = 200.0f;
   float acceleration = 20.0f;
   int sendflags = 0;
   std::unordered_map<std::string, ScriptValue> script_vars;
