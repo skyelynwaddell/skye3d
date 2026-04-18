@@ -12,6 +12,7 @@
 #include <memory>
 #include <functional>
 #include <vector>
+#include "bsp.h"
 
 void SendToClient(ENetPeer *peer, uint8_t type, const void *data, size_t data_len);
 
@@ -40,6 +41,7 @@ public:
   std::string target = "";
   Vector3 velocity = {0.0f, 0.0f, 0.0f};
   Vector3 position = {0.0f, 0.0f, 0.0f};
+  Vector3 collision_offset = {0.0f, 0.0f, 0.0f};
   Vector3 collision_box = {0.5f, 0.6f, 0.5f};
   Vector3 size = {0.5f, 0.6f, 0.5f};
   float speed = 200.0f;
@@ -54,15 +56,13 @@ public:
   virtual void Update() {};
   virtual void Draw()
   {
-
     if (global_show_collisions)
     {
-      Vector3 drawPos = {position.x, position.y + collision_box.y * 0.08f, position.z};
-
-      DrawCube(drawPos, collision_box.x, collision_box.y, collision_box.z, RED);
+      Vector3 drawPos = Vector3Add(position, collision_offset);
       DrawCubeWires(drawPos, collision_box.x, collision_box.y, collision_box.z, MAROON);
     }
   };
+  virtual void DrawDebug() {};
   virtual void DrawGUI() {};
   virtual void CleanUp() {};
 };
@@ -118,6 +118,15 @@ inline void GameObject3D_DrawAll()
 {
   GameLoop("draw", [&](size_t i)
            { gameobjects[i]->Draw(); });
+};
+/*
+GameObject3D_DrawAllDebug
+Draw all objects
+*/
+inline void GameObject3D_DrawAllDebug()
+{
+  GameLoop("drawdebug", [&](size_t i)
+           { gameobjects[i]->DrawDebug(); });
 };
 
 /*

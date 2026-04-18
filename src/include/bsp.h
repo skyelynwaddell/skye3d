@@ -15,10 +15,13 @@
 #include <assert.h>
 #include <cfloat>
 
+#include "global.h"
+
 inline std::vector<Model> models;
 
 inline Shader default_shader;
 inline Shader invisible_shader;
+inline Shader debug_shader;
 
 inline Shader liquid_shader;
 inline int liquid_time_loc;
@@ -29,6 +32,18 @@ inline int sky_campos_loc;
 
 inline float SLOPE_MAX = 0.4f;   // max slope angle we can walk up
 inline float SLOPE_BOOST = 0.7f; // allows so we arent inching up slopes
+
+/*
+ TraceResult
+ result of a single hull-trace through the BSP clipnode tree
+ */
+struct TraceResult
+{
+  float fraction = 1.0f;      // 0..1 — how far the move completed before impact
+  Vector3 normal = {0, 0, 0}; // surface normal at impact, in raylib space
+  bool started_solid = false; // origin was already inside solid
+  bool all_solid = false;     // entire trace was inside solid
+};
 
 // -----------------------------------------------------------------------
 // ReadT Helpers
@@ -749,6 +764,10 @@ struct BSP_Renderer
   std::unordered_map<std::string, Texture> textures;
   std::unordered_map<int, std::string> face_to_texture;
 
+  // face indices that belong to brush entity submodels (func_door, trigger_*, etc.)
+  // populated before BuildClusterModels so those faces are excluded from static batches
+  std::set<int32_t> submodel_face_ids;
+
   /*
 BuildClusterModels
 builds sections (clusters) of models seperated up for better lookup when culling
@@ -758,6 +777,8 @@ builds sections (clusters) of models seperated up for better lookup when culling
     default_shader = LoadShader(VS_PATH, FS_PATH);
     invisible_shader = LoadShader("gamedata/shaders/330/invisible.vs", "gamedata/shaders/330/invisible.fs");
     liquid_shader = LoadShader("gamedata/shaders/330/water.vs", "gamedata/shaders/330/water.fs");
+    debug_shader = LoadShader("gamedata/shaders/330/debug.vs", "gamedata/shaders/330/debug.fs");
+
     liquid_time_loc = GetShaderLocation(liquid_shader, "time");
     sky_shader = LoadShader("gamedata/shaders/330/sky.vs", "gamedata/shaders/330/sky.fs");
     sky_time_loc = GetShaderLocation(sky_shader, "time");
@@ -777,6 +798,8 @@ builds sections (clusters) of models seperated up for better lookup when culling
         uint16_t face_id = bsp_file->listface(leaf.listface_id + i);
         if (processed[vis_key].count(face_id))
           continue;
+        if (submodel_face_ids.count(face_id))
+          continue; // belongs to a brush entity — handled separately
         processed[vis_key].insert(face_id);
 
         Face face = bsp_file->face(face_id);
@@ -977,6 +1000,16 @@ builds sections (clusters) of models seperated up for better lookup when culling
       pvs.num_leaves = cluster_count;
 
       BuildLeafToClusterMapping();
+    }
+
+    // collect face indices that belong to brush entity submodels (model index > 0)
+    // so BuildClusterModels can exclude them from the static world batches
+    int num_models = bsp_file->header.models.size / sizeof(BSP_Model);
+    for (int m = 1; m < num_models; m++)
+    {
+      BSP_Model submodel = bsp_file->model(m);
+      for (int f = 0; f < submodel.face_num; f++)
+        submodel_face_ids.insert(submodel.face_id + f);
     }
 
     // build face to texture mapping
@@ -1329,20 +1362,8 @@ struct BSP_Collider
   bool IsSolid(Vector3 raylib_pos)
   {
     // return PointContents(ToQuake(raylib_pos)) == -2;
-    auto tr = TraceLine(raylib_pos, raylib_pos);
+    auto tr = TraceBSP(raylib_pos, raylib_pos);
     return tr.started_solid || tr.all_solid;
-  };
-
-  /*
-  TraceResult
-  result of a single hull-trace through the BSP clipnode tree
-  */
-  struct TraceResult
-  {
-    float fraction = 1.0f;      // 0..1 — how far the move completed before impact
-    Vector3 normal = {0, 0, 0}; // surface normal at impact, in raylib space
-    bool started_solid = false; // origin was already inside solid
-    bool all_solid = false;     // entire trace was inside solid
   };
 
   /*
@@ -1419,7 +1440,7 @@ struct BSP_Collider
   traces the BSP player hull from 'from' to 'to' (raylib space).
   the clipnodes are pre-expanded for the player size, so this is a proper swept-box test.
   */
-  TraceResult TraceLine(Vector3 from_rl, Vector3 to_rl)
+  inline TraceResult TraceBSP(Vector3 from_rl, Vector3 to_rl)
   {
     TraceResult tr = {};
     tr.fraction = 1.0f;
@@ -1428,6 +1449,54 @@ struct BSP_Collider
     if (tr.started_solid && tr.fraction == 1.0f)
       tr.all_solid = true;
     return tr;
+  };
+
+  // -----------------------------------------------------------------------
+  // Entity Hull Collisions
+  // -----------------------------------------------------------------------
+
+  // Clipnode root indices for non-trigger brush entity submodels.
+  // These hulls are already pre-expanded for the player size (hull 1),
+  // same as the world hull — so no Minkowski expansion needed.
+  std::vector<int32_t> entity_hull_roots;
+
+  /*
+  TraceEntityHulls
+  Runs RecursiveHullCheck against every registered entity hull and returns
+  the earliest hit, combining with the world-geometry trace in TraceCombined.
+  */
+  TraceResult TraceEntityHulls(Vector3 from, Vector3 to)
+  {
+    TraceResult best;
+    best.fraction = 1.0f;
+
+    Vector3 qfrom = ToQuake(from);
+    Vector3 qto   = ToQuake(to);
+
+    for (int32_t ent_root : entity_hull_roots)
+    {
+      TraceResult tr = {};
+      tr.fraction = 1.0f;
+      RecursiveHullCheck(ent_root, 0.0f, 1.0f, qfrom, qto, tr);
+      if (tr.started_solid && tr.fraction == 1.0f)
+        tr.all_solid = true;
+
+      if (tr.fraction < best.fraction)
+        best = tr;
+    }
+    return best;
+  };
+
+  /*
+  TraceCombined
+  Returns the earliest hit between BSP world geometry and solid brush entities.
+  Use this everywhere instead of TraceBSP so entities block movement.
+  */
+  TraceResult TraceCombined(Vector3 from, Vector3 to)
+  {
+    TraceResult bsp = TraceBSP(from, to);
+    TraceResult ent = TraceEntityHulls(from, to);
+    return (ent.fraction < bsp.fraction) ? ent : bsp;
   };
 
   /*
@@ -1511,7 +1580,7 @@ struct BSP_Collider
 
     float down_dist = 2.0f * bsp_raylib_scale; // step height downwards
     Vector3 point_down = {pos.x, pos.y - down_dist, pos.z};
-    TraceResult tr = TraceLine(pos, point_down);
+    TraceResult tr = TraceCombined(pos, point_down);
 
     if (tr.fraction == 1.0f || tr.normal.y < SLOPE_MAX)
     {
@@ -1550,7 +1619,7 @@ struct BSP_Collider
       Vector3 start = {pos.x + vel_dir_x * offset, pos.y, pos.z + vel_dir_z * offset};
       Vector3 stop = {start.x, start.y - (34.0f * bsp_raylib_scale), start.z};
 
-      TraceResult tr = TraceLine(start, stop);
+      TraceResult tr = TraceCombined(start, stop);
 
       if (tr.fraction == 1.0f)
       {
@@ -1640,7 +1709,7 @@ struct BSP_Collider
         break;
 
       Vector3 end = Vector3Add(pos, Vector3Scale(vel, time_left));
-      TraceResult tr = TraceLine(pos, end);
+      TraceResult tr = TraceCombined(pos, end);
 
       if (tr.fraction < 1.0f && !tr.started_solid)
       {
@@ -1749,13 +1818,13 @@ struct BSP_Collider
         pos.x + vel.x * GetFrameTime(),
         pos.y,
         pos.z + vel.z * GetFrameTime()};
-    TraceResult direct_tr = TraceLine(pos, direct_dest);
+    TraceResult direct_tr = TraceCombined(pos, direct_dest);
 
     if (direct_tr.fraction == 1.0f)
     {
       pos = direct_dest; // no walls, keep moving
       Vector3 down_dest = {pos.x, pos.y - step_height, pos.z};
-      TraceResult down_tr = TraceLine(pos, down_dest);
+      TraceResult down_tr = TraceCombined(pos, down_dest);
       if (down_tr.fraction < 1.0f && down_tr.normal.y > SLOPE_MAX)
       {
         pos.y -= step_height * down_tr.fraction;
@@ -1789,7 +1858,7 @@ struct BSP_Collider
 
     // step up
     Vector3 dest_up = {pos.x, pos.y + step_height, pos.z};
-    TraceResult tr_up = TraceLine(pos, dest_up);
+    TraceResult tr_up = TraceCombined(pos, dest_up);
     if (!tr_up.started_solid)
     {
       pos.y += step_height * tr_up.fraction;
@@ -1802,7 +1871,7 @@ struct BSP_Collider
     Vector3 step_pos = {};
     Vector3 air_finish_pos = pos;
     Vector3 dest_down = {air_finish_pos.x, air_finish_pos.y - step_height, air_finish_pos.z};
-    TraceResult tr_down = TraceLine(air_finish_pos, dest_down);
+    TraceResult tr_down = TraceCombined(air_finish_pos, dest_down);
     float slide_dist_sq, step_dist_sq;
     bool stepped_up;
 
@@ -1895,7 +1964,7 @@ struct BSP_Collider
     {
       float step = 18.0f * bsp_raylib_scale;
       Vector3 down = {pos.x, pos.y - step, pos.z};
-      TraceResult tr = TraceLine(pos, down);
+      TraceResult tr = TraceCombined(pos, down);
       if (tr.fraction < 1.0f && tr.normal.y > SLOPE_MAX)
       {
         pos.y -= step * tr.fraction;
@@ -1946,12 +2015,145 @@ inline std::vector<Model> LoadModelsFromBSPFile(const std::filesystem::path &pat
   // load bsp collision data
   std::ifstream bsp_file{path, std::ios::binary};
   BSP_File map{bsp_file};
+  bsp_collider.entity_hull_roots.clear(); // clear stale entity hulls from any previous map
   bsp_collider.Load(map);
 
   // copy models to models vector
   models = bsp_renderer.all_models;
 
   return models;
+}
+
+// -----------------------------------------------------------------------
+// Brush Entity Spawning
+// -----------------------------------------------------------------------
+
+/*
+BSP_BrushEntityData
+All data extracted from a single brush entity (func_door, trigger_once, etc.)
+Pass this to your game's object factory to create GameObjects.
+*/
+struct BSP_BrushEntityData
+{
+  std::string classname;
+  std::unordered_map<std::string, std::string> tags; // all raw entity key-values
+  Vector3 origin = {0, 0, 0};                        // parsed + converted to raylib space
+  Model model = {};                                  // brush geometry (check meshCount > 0)
+  bool has_model = false;
+  Vector3 collision_box = {0, 0, 0};
+  Vector3 collision_offset = {0, 0, 0};
+
+  // Convenience: read a tag or return a default
+  std::string GetTag(const std::string &key, const std::string &fallback = "") const
+  {
+    auto it = tags.find(key);
+    return it != tags.end() ? it->second : fallback;
+  }
+};
+
+/*
+BSP_SpawnBrushEntities
+Iterates the entity list, finds every brush entity (any entity whose "model" key
+starts with "*"), builds its geometry, and returns a BSP_BrushEntityData for each.
+
+Call this after LoadModelsFromBSPFile. Iterate the result and push_back your
+own GameObject subclass into `gameobjects` for each entry.
+
+Example:
+  for (auto &data : BSP_SpawnBrushEntities())
+  {
+    if (data.classname == "func_door")
+    {
+      auto door = std::make_unique<MyDoor>(data);
+      gameobjects.push_back(std::move(door));
+    }
+  }
+*/
+inline std::vector<BSP_BrushEntityData> BSP_SpawnBrushEntities()
+{
+  std::vector<BSP_BrushEntityData> results;
+  if (!bsp_renderer.bsp_file)
+    return results;
+
+  BSP_File &bsp = *bsp_renderer.bsp_file;
+
+  for (auto &entity : bsp.entities())
+  {
+    // must have a classname
+    if (!entity.tags.count("classname"))
+      continue;
+
+    // must reference a brush submodel ("*1", "*2", etc.)
+    if (!entity.tags.count("model"))
+      continue;
+    const std::string &model_key = entity.tags.at("model");
+    if (model_key.empty() || model_key[0] != '*')
+      continue;
+
+    int model_idx = 0;
+    try
+    {
+      model_idx = std::stoi(model_key.substr(1));
+    }
+    catch (...)
+    {
+      continue;
+    }
+
+    BSP_BrushEntityData data;
+    data.classname = entity.tags.at("classname");
+    data.tags = entity.tags;
+
+    // parse origin ("x y z" in Quake space) → raylib space
+    if (entity.tags.count("origin"))
+    {
+      float qx = 0, qy = 0, qz = 0;
+      sscanf(entity.tags.at("origin").c_str(), "%f %f %f", &qx, &qy, &qz);
+      data.origin = FromQuake({qx, qy, qz});
+    }
+
+    // collect faces for this submodel
+    BSP_Model submodel = bsp.model(model_idx);
+    std::vector<Face> faces;
+    faces.reserve(submodel.face_num);
+    for (int f = 0; f < submodel.face_num; f++)
+      faces.push_back(bsp.face(submodel.face_id + f));
+
+    if (!faces.empty())
+    {
+      Mesh mesh = GenMeshFaces(bsp, faces);
+      data.model = LoadModelFromMesh(mesh);
+
+      // assign shader — triggers are invisible, everything else uses default
+      bool is_trigger = data.classname.starts_with("trigger");
+      // data.model.materials[0].shader = is_trigger ? invisible_shader : default_shader;
+      // data.model.materials[0].shader = debug_shader;
+
+      // assign texture from the first face (best-effort; submodels can have mixed textures)
+      TexInfo ti = bsp.texinfo(faces[0].texinfo_id);
+      Miptex mx = bsp.miptex(ti.miptex_id);
+      auto tex_it = bsp_renderer.textures.find(std::string(mx.name));
+      if (tex_it != bsp_renderer.textures.end())
+        data.model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = tex_it->second;
+
+      // compute bounding box data (vertices are in world-space raylib coords)
+      BoundingBox bb = GetModelBoundingBox(data.model);
+      data.collision_box = Vector3Subtract(bb.max, bb.min);
+      Vector3 bb_center = Vector3Scale(Vector3Add(bb.min, bb.max), 0.5f);
+      data.collision_offset = Vector3Subtract(bb_center, data.origin);
+
+      // register solid (non-trigger) entities with the collider so MoveAndSlide blocks on them.
+      // use clipnode1_id — the BSP hull already pre-expanded for the player size, same as the world hull.
+      if (!is_trigger)
+        bsp_collider.entity_hull_roots.push_back(submodel.clipnode1_id);
+
+      data.has_model = true;
+    }
+
+    results.push_back(std::move(data));
+  }
+
+  return results;
 }
 
 /*

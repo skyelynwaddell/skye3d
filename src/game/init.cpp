@@ -4,6 +4,7 @@
 #include <cfg_parser.h>
 #include <bsp.h>
 #include <rlImGui.h>
+#include <gameobjects/brush_entity.h>
 
 void Init()
 {
@@ -24,13 +25,13 @@ void Init()
   {
     bsp_renderer.texture_filter = global_texture_filter;
     models = LoadModelsFromBSPFile(global_map_to_load);
+    SpawnBrushEntities();
   }
   catch (...)
   {
     global_map_to_load = "";
   }
 
-  DisableCursor(); // Limit cursor to relative movement inside the window
-
+  DisableCursor(); // Limit cursor to relative movement inside the w
   Camera3D_Init();
 };

@@ -28,3 +28,4 @@ inline float global_fps_y = 0.0f;
 // RL_TEXTURE_FILTER_ANISOTROPIC_8X = 4,   // Anisotropic filtering 8x
 // RL_TEXTURE_FILTER_ANISOTROPIC_16X = 5,  // Anisotropic filtering 16x
 inline int global_texture_filter = 2;
+

@@ -30,6 +30,7 @@ void Draw()
   BeginMode3D(*camera);
   BSP_Draw(shader, enable_wireframe, camera->position);
   GameObject3D_DrawAll();
+
   EndMode3D();
   EndTextureMode();
 
@@ -93,7 +94,7 @@ void Draw()
   // Pass 7 - Combined Render Texture Aspect Ratio Scaled
   BeginDrawing();
   ClearBackground(BLACK);
-  
+
   BeginShaderMode(pp_composite);
   rlActiveTextureSlot(1);
   rlEnableTexture(pp_bloom_fbo_a.texture.id);
@@ -117,6 +118,20 @@ void Draw()
   rlDisableTexture();
   rlActiveTextureSlot(0);
   EndShaderMode();
+
+  rlDisableBackfaceCulling();
+  rlEnableDepthTest();
+  rlSetBlendMode(BLEND_ALPHA);
+
+  rlSetTexture(0);
+  rlActiveTextureSlot(0);
+
+  BeginMode3D(*camera);
+  rlSetLineWidth(10.0f);
+  BeginShaderMode(debug_shader);
+  GameObject3D_DrawAllDebug();
+  EndShaderMode();
+  EndMode3D();
 
   // if (enable_imgui)
   // {
