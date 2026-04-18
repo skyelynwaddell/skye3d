@@ -32,6 +32,7 @@ SQInteger sq_get_instance_count(HSQUIRRELVM vm);
 // [gameobject] table
 // instance sub functions [obj.get_position()]
 SQInteger sq_instance_destroy(HSQUIRRELVM vm);
+SQInteger sq_instance_is_valid(HSQUIRRELVM vm);
 SQInteger sq_instance_get_position(HSQUIRRELVM vm);
 SQInteger sq_instance_set_position(HSQUIRRELVM vm);
 SQInteger sq_instance_get_velocity(HSQUIRRELVM vm);
@@ -44,12 +45,15 @@ SQInteger sq_instance_get_speed(HSQUIRRELVM vm);
 SQInteger sq_instance_set_speed(HSQUIRRELVM vm);
 SQInteger sq_instance_get_acceleration(HSQUIRRELVM vm);
 SQInteger sq_instance_set_acceleration(HSQUIRRELVM vm);
+SQInteger sq_instance_get_classname(HSQUIRRELVM vm);
+SQInteger sq_instance_set_classname(HSQUIRRELVM vm);
 SQInteger sq_instance_get_target_name(HSQUIRRELVM vm);
 SQInteger sq_instance_set_target_name(HSQUIRRELVM vm);
 SQInteger sq_instance_get_target(HSQUIRRELVM vm);
 SQInteger sq_instance_set_target(HSQUIRRELVM vm);
 SQInteger sq_instance_set_var(HSQUIRRELVM vm);
 SQInteger sq_instance_get_var(HSQUIRRELVM vm);
+SQInteger sq_instance_print(HSQUIRRELVM vm);
 
 SQInteger sq_instance_get(HSQUIRRELVM vm); // special for funcs to run on objs
 

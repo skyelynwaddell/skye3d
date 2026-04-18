@@ -86,6 +86,19 @@ static Color SQGetColor(HSQUIRRELVM v, SQInteger index)
   return c;
 };
 
+SQInteger sq_instance_is_valid(HSQUIRRELVM vm)
+{
+  GameObject3D **ud = nullptr;
+  if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)))
+  {
+    sq_pushbool(vm, SQFalse);
+    return 1;
+  }
+  bool valid = ud && *ud && !(*ud)->destroy_me;
+  sq_pushbool(vm, valid ? SQTrue : SQFalse);
+  return 1;
+};
+
 // Helper to wrap a C++ pointer into a Squirrel Userdata with the method delegate
 static void PushGameObjectAsUserdata(HSQUIRRELVM vm, GameObject3D *obj)
 {
@@ -106,6 +119,9 @@ static void PushGameObjectAsUserdata(HSQUIRRELVM vm, GameObject3D *obj)
   bindfunc("get", sq_instance_get_var);
   bindfunc("set", sq_instance_set_var);
   bindfunc("destroy", sq_instance_destroy);
+  bindfunc("is_valid", sq_instance_is_valid);
+  bindfunc("get_classname", sq_instance_get_classname);
+  bindfunc("set_classname", sq_instance_set_classname);
   bindfunc("get_target_name", sq_instance_get_target_name);
   bindfunc("set_target_name", sq_instance_set_target_name);
   bindfunc("get_target", sq_instance_get_target);
@@ -122,6 +138,7 @@ static void PushGameObjectAsUserdata(HSQUIRRELVM vm, GameObject3D *obj)
   bindfunc("get_size", sq_instance_get_size);
   bindfunc("set_collision_box", sq_instance_set_collision_box);
   bindfunc("get_collision_box", sq_instance_get_collision_box);
+  bindfunc("print", sq_instance_print);
 
   sq_setdelegate(vm, -2); // Set table as delegate for userdata
 }
@@ -1200,6 +1217,7 @@ SQInteger sq_instance_get(HSQUIRRELVM vm)
 
   if (SQ_SUCCEEDED(sq_get(vm, -2)))
   {
+    sq_remove(vm, -2);
     return 1;
   }
 
@@ -1326,6 +1344,42 @@ SQInteger sq_instance_get_position(HSQUIRRELVM vm)
     return 1;
   }
 
+  return 0;
+};
+
+SQInteger sq_instance_print(HSQUIRRELVM vm)
+{
+  const SQChar *s;
+  if (SQ_SUCCEEDED(sq_getstring(vm, 2, &s)))
+    sq_getprintfunc(vm)(vm, "%s", s);
+  return 0;
+};
+
+/*  className*/
+SQInteger sq_instance_get_classname(HSQUIRRELVM vm)
+{
+  GameObject3D **ud = nullptr;
+  if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)) || !ud || !*ud)
+  {
+    sq_pushstring(vm, "", -1);
+    return 1;
+  }
+  sq_pushstring(vm, (*ud)->classname.c_str(), -1);
+  return 1;
+};
+
+SQInteger sq_instance_set_classname(HSQUIRRELVM vm)
+{
+  GameObject3D **ud = nullptr;
+  const SQChar *name = nullptr;
+
+  if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)) || !ud || !*ud)
+    return sq_throwerror(vm, "Invalid object instance");
+
+  if (SQ_FAILED(sq_getstring(vm, 2, &name)))
+    return sq_throwerror(vm, "Argument 1 must be a string");
+
+  (*ud)->classname = name;
   return 0;
 };
 
@@ -2176,9 +2230,9 @@ static HSQUIRRELVM sqSetupVM(const char *side_name)
     // instances
     sq_register_func(v, sq_get_player_count, "get_player_count");
     sq_register_func(v, sq_instance_create, "instance_create");
-    sq_register_func(v, sq_instances_get, "instances_get_all");
+    sq_register_func(v, sq_instances_get_all, "instances_get_all");
     sq_register_func(v, sq_instances_get, "instances_get");
-    sq_register_func(v, sq_instances_get, "get_instance_count");
+    sq_register_func(v, sq_get_instance_count, "get_instance_count");
     sq_register_func(v, sq_get_player_instance, "get_player_instance");
   }
 

@@ -1471,7 +1471,7 @@ struct BSP_Collider
     best.fraction = 1.0f;
 
     Vector3 qfrom = ToQuake(from);
-    Vector3 qto   = ToQuake(to);
+    Vector3 qto = ToQuake(to);
 
     for (int32_t ent_root : entity_hull_roots)
     {
@@ -1713,8 +1713,8 @@ struct BSP_Collider
 
       if (tr.fraction < 1.0f && !tr.started_solid)
       {
-        printf("hit: normal=(%.2f,%.2f,%.2f) fraction=%.3f\n",
-               tr.normal.x, tr.normal.y, tr.normal.z, tr.fraction);
+        // printf("hit: normal=(%.2f,%.2f,%.2f) fraction=%.3f\n",
+        //  tr.normal.x, tr.normal.y, tr.normal.z, tr.fraction);
       }
 
       if (tr.all_solid)

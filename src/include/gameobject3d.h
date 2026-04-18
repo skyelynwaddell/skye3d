@@ -37,6 +37,7 @@ public:
   int client_id = -1;
   bool is_me = false;
   bool destroy_me = false;
+  std::string classname = "";
   std::string target_name = "";
   std::string target = "";
   Vector3 velocity = {0.0f, 0.0f, 0.0f};

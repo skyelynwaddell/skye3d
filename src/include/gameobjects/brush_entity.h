@@ -21,7 +21,6 @@ Basic usage — just renders the brush at its origin and provides tag access:
 class BrushEntity : public GameObject3D
 {
 public:
-  std::string classname;
   std::unordered_map<std::string, std::string> tags;
   Model brush_model = {};
   bool has_model = false;
