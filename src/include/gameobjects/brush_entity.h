@@ -24,6 +24,7 @@ public:
   std::unordered_map<std::string, std::string> tags;
   Model brush_model = {};
   bool has_model = false;
+  int clipnode_root = -1;
 
   Model cube;
 
@@ -37,7 +38,10 @@ public:
     target = GetTag("target");
     brush_model = data.model;
     has_model = data.has_model;
-    cube = LoadModelFromMesh(GenMeshCube(1, 1, 1));
+    clipnode_root = data.clipnode_root;
+
+    bsp_collider.entity_hulls.push_back({clipnode_root,
+                                         &position});
   }
 
   // Read a tag value, returns fallback if not present

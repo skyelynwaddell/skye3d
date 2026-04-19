@@ -34,7 +34,8 @@ class GameObject3D
 {
 public:
   virtual ~GameObject3D() = default;
-  int client_id = -1;
+  int client_id = -1; // multiplayer client id only for player objects
+  int net_id = 0;     // unique identifier for replication
   bool is_me = false;
   bool destroy_me = false;
   std::string classname = "";
@@ -49,6 +50,11 @@ public:
   float acceleration = 20.0f;
   int sendflags = 0;
   std::unordered_map<std::string, ScriptValue> script_vars;
+
+  HSQOBJECT server_think_func;
+  bool has_server_think = false;
+  HSQOBJECT client_think_func;
+  bool has_client_think = false;
 
   void Destroy() { destroy_me = true; };
   bool IsMoving() { return Vector3Length(velocity) > 0.01f; };
@@ -188,6 +194,7 @@ T *InstanceFindByTargetName(std::string target_name)
 InstanceCreate
 usage: Player* player = InstanceCreate<Player>({ spawn_x, spawn_y });
 */
+inline int net_id = 0;
 template <class T, class... Args>
   requires(std::is_base_of_v<GameObject3D, T>)
 T *InstanceCreate(Vector3 spawn_pos, Args &&...args)
@@ -195,10 +202,8 @@ T *InstanceCreate(Vector3 spawn_pos, Args &&...args)
   auto obj = std::make_unique<T>(std::forward<Args>(args)...);
   T *ptr = obj.get();
   ptr->position = spawn_pos;
-  printf("DEBUG: Instance created: Type=%s, Address=%p\n",
-         typeid(*ptr).name(),
-         (void *)ptr);
-
+  net_id++;
+  ptr->net_id = net_id;
   gameobjects.push_back(std::move(obj));
   return ptr;
 };

@@ -54,6 +54,7 @@ SQInteger sq_instance_set_target(HSQUIRRELVM vm);
 SQInteger sq_instance_set_var(HSQUIRRELVM vm);
 SQInteger sq_instance_get_var(HSQUIRRELVM vm);
 SQInteger sq_instance_print(HSQUIRRELVM vm);
+SQInteger sq_instance_set_think(HSQUIRRELVM vm);
 
 SQInteger sq_instance_get(HSQUIRRELVM vm); // special for funcs to run on objs
 

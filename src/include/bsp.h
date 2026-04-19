@@ -165,6 +165,11 @@ struct Entity
 {
   std::unordered_map<std::string, std::string> tags;
 };
+struct EntityHull
+{
+  int32_t root;
+  Vector3 *entity_pos;
+};
 
 /*
 BSP Model
@@ -1313,6 +1318,7 @@ struct BSP_Collider
   std::vector<Plane> planes;
   std::vector<Clipnode> clipnodes;
   int32_t root = 0;
+  std::vector<EntityHull> entity_hulls;
 
   /*
   Load
@@ -1458,7 +1464,6 @@ struct BSP_Collider
   // Clipnode root indices for non-trigger brush entity submodels.
   // These hulls are already pre-expanded for the player size (hull 1),
   // same as the world hull — so no Minkowski expansion needed.
-  std::vector<int32_t> entity_hull_roots;
 
   /*
   TraceEntityHulls
@@ -1470,20 +1475,30 @@ struct BSP_Collider
     TraceResult best;
     best.fraction = 1.0f;
 
-    Vector3 qfrom = ToQuake(from);
-    Vector3 qto = ToQuake(to);
-
-    for (int32_t ent_root : entity_hull_roots)
+    for (auto &hull : entity_hulls)
     {
+      // convert world to entity local space
+      if (hull.entity_pos == nullptr)
+        continue;
+
+      Vector3 local_from = Vector3Subtract(from, *hull.entity_pos);
+      Vector3 local_to = Vector3Subtract(to, *hull.entity_pos);
+
+      Vector3 qfrom = ToQuake(local_from);
+      Vector3 qto = ToQuake(local_to);
+
       TraceResult tr = {};
       tr.fraction = 1.0f;
-      RecursiveHullCheck(ent_root, 0.0f, 1.0f, qfrom, qto, tr);
+
+      RecursiveHullCheck(hull.root, 0.0f, 1.0f, qfrom, qto, tr);
+
       if (tr.started_solid && tr.fraction == 1.0f)
         tr.all_solid = true;
 
       if (tr.fraction < best.fraction)
         best = tr;
     }
+
     return best;
   };
 
@@ -2015,7 +2030,7 @@ inline std::vector<Model> LoadModelsFromBSPFile(const std::filesystem::path &pat
   // load bsp collision data
   std::ifstream bsp_file{path, std::ios::binary};
   BSP_File map{bsp_file};
-  bsp_collider.entity_hull_roots.clear(); // clear stale entity hulls from any previous map
+  bsp_collider.entity_hulls.clear(); // clear stale entity hulls from any previous map
   bsp_collider.Load(map);
 
   // copy models to models vector
@@ -2042,6 +2057,7 @@ struct BSP_BrushEntityData
   bool has_model = false;
   Vector3 collision_box = {0, 0, 0};
   Vector3 collision_offset = {0, 0, 0};
+  int clipnode_root = -1;
 
   // Convenience: read a tag or return a default
   std::string GetTag(const std::string &key, const std::string &fallback = "") const
@@ -2145,7 +2161,7 @@ inline std::vector<BSP_BrushEntityData> BSP_SpawnBrushEntities()
       // register solid (non-trigger) entities with the collider so MoveAndSlide blocks on them.
       // use clipnode1_id — the BSP hull already pre-expanded for the player size, same as the world hull.
       if (!is_trigger)
-        bsp_collider.entity_hull_roots.push_back(submodel.clipnode1_id);
+        data.clipnode_root = submodel.clipnode1_id;
 
       data.has_model = true;
     }
@@ -2464,3 +2480,4 @@ inline Color_RGB8 palette(uint8_t id)
   };
   return _PALETTE[id];
 };
+     
