@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.6)
 
+add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wno-template-body>)
 
-
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>")
@@ -26,24 +26,25 @@ ${SYSTEM_SOURCES}
 ${GAME_SOURCES}
 )
 
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    add_compile_options(-Wno-template-body)
+endif()
+
 target_include_directories(game PRIVATE 
     src/include
     src/include/gameobjects
-		src/lib/squirrel/include
 		src/lib
-		src/lib/lua
-		src/lib/sol2
+		src/lib/lua/include
+		src/lib/sol
 )
 
 add_definitions(-DHAS_GETADDRINFO)
 target_link_libraries(game PRIVATE 
-	raylib 
-	imgui 
-	rlImGui
-	${CMAKE_SOURCE_DIR}/src/lib/squirrel/squirrel-win/libsquirrel_static.a
-	${CMAKE_SOURCE_DIR}/src/lib/squirrel/squirrel-win/libsqstdlib_static.a
-	${CMAKE_SOURCE_DIR}/src/lib/enet/libenet.a
-	${CMAKE_SOURCE_DIR}/src/lib/lua/liblua54.a
+raylib 
+imgui 
+rlImGui
+${CMAKE_SOURCE_DIR}/src/lib/enet/libenet.a
+${CMAKE_SOURCE_DIR}/src/lib/lua/liblua54.a
 	winmm ws2_32
 )
 

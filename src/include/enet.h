@@ -75,7 +75,7 @@ typedef struct ENetMessage
 
 #define MAX_PLAYERS 64
 extern MultiplayerUser users[MAX_PLAYERS];
-extern int users_count;
+extern int client_count;
 
 /* ENet Client*/
 int enetclient_init(void);                                         // Initialize the ENet client system (call once at startup)

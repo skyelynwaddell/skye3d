@@ -1,0 +1,14 @@
+-- sv_network_events.lua
+-- Custom network events go here
+
+-- Example:
+-- packet_funcs.get_position = function(packet)
+--   local me = get_player_instance(packet.client_id)
+--
+--   if me then
+--     local pos = me:get_position()
+--
+--     -- send response to client
+--     send_packet_vector3(packet.client_id, "get_position", pos)
+--   end
+-- end

@@ -118,7 +118,7 @@ inline void NetDispatch(const unsigned char *buffer, size_t size, ENetPeer *peer
     return;
   }
 
-  for (int i = 0; i < users_count; i++)
+  for (int i = 0; i < client_count; i++)
   {
     if (!users[i].peer)
       continue;

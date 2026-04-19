@@ -1,11 +1,11 @@
 #include "engine.h"
 #include <camera3d.h>
-#include <sq.h>
+#include <lua.hpp>
 #include <gameobject3d.h>
 
 void Update()
 {
-  sqUpdate(GetFrameTime());
+  luaUpdate(GetFrameTime());
   Camera3D_Update();
   GameObject3D_UpdateAll();
 

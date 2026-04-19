@@ -1,0 +1,2 @@
+-- cs_globals.lua
+-- user defined globals

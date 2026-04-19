@@ -169,6 +169,7 @@ struct EntityHull
 {
   int32_t root;
   Vector3 *entity_pos;
+  Vector3 spawn_origin;
 };
 
 /*
@@ -1477,12 +1478,22 @@ struct BSP_Collider
 
     for (auto &hull : entity_hulls)
     {
-      // convert world to entity local space
       if (hull.entity_pos == nullptr)
         continue;
 
-      Vector3 local_from = Vector3Subtract(from, *hull.entity_pos);
-      Vector3 local_to = Vector3Subtract(to, *hull.entity_pos);
+      // IMPORTANT: In Quake BSP, submodel clipnodes are relative to the world (0,0,0).
+      // To move them, we find out how much the entity has MOVED from its start point.
+      // If your BrushEntity has a 'spawn_origin' member:
+
+      // This is the "Delta" movement. If position is 10 units higher than spawn, offset is {0, 10, 0}
+      // Note: You might need to cast your hull.entity_pos back to a BrushEntity* // or store the spawn_origin pointer too.
+
+      // For now, let's assume 'spawn_origin' is available:
+      Vector3 movement_offset = Vector3Subtract(*hull.entity_pos, hull.spawn_origin);
+
+      // Shift the ray in the opposite direction of the movement
+      Vector3 local_from = Vector3Subtract(from, movement_offset);
+      Vector3 local_to = Vector3Subtract(to, movement_offset);
 
       Vector3 qfrom = ToQuake(local_from);
       Vector3 qto = ToQuake(local_to);
@@ -1492,13 +1503,9 @@ struct BSP_Collider
 
       RecursiveHullCheck(hull.root, 0.0f, 1.0f, qfrom, qto, tr);
 
-      if (tr.started_solid && tr.fraction == 1.0f)
-        tr.all_solid = true;
-
       if (tr.fraction < best.fraction)
         best = tr;
     }
-
     return best;
   };
 
@@ -2480,4 +2487,3 @@ inline Color_RGB8 palette(uint8_t id)
   };
   return _PALETTE[id];
 };
-     

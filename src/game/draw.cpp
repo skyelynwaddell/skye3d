@@ -1,6 +1,6 @@
 #include "engine.h"
 #include <camera3d.h>
-#include <sq.h>
+#include <lua.hpp>
 #include <gameobject3d.h>
 #include <bsp.h>
 
@@ -13,7 +13,7 @@ void Draw()
   if (!camera)
     return;
 
-  sqDraw(GetFrameTime());
+  luaDraw(GetFrameTime());
 
   static bool enable_wireframe = false;
   if (SCREEN_WIDTH != lastscreenw || SCREEN_HEIGHT != lastscreenh)

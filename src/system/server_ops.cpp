@@ -59,9 +59,9 @@ void ConnectUser(ENetPeer *peer)
          event.peer->address.port);
 
   // add user
-  if (users_count < MAX_PLAYERS)
+  if (client_count < MAX_PLAYERS)
   {
-    int id = users_count++;
+    int id = client_count++;
     users[id].player_id = id;
     users[id].peer = event.peer;
     event.peer->data = &users[id];
@@ -118,7 +118,7 @@ void SetPosition(Vector3 new_pos, int sender_id)
   memcpy(buffer, &sender_id, sizeof(int));
   memcpy(buffer + sizeof(int), &new_pos, sizeof(Vector3));
 
-  for (int i = 0; i < users_count; i++)
+  for (int i = 0; i < client_count; i++)
     if (users[i].peer && users[i].player_id != sender_id)
       SendToClient(users[i].peer, MESSAGE_TYPE_INTERNAL_POS_UPDATE, buffer, sizeof(buffer));
 };
@@ -129,7 +129,7 @@ Removes a user from the list and destroys their game object
 */
 void DisconnectUser(ENetPeer *peer)
 {
-  for (int i = 0; i < users_count; i++)
+  for (int i = 0; i < client_count; i++)
   {
     if (users[i].peer != peer)
       continue;
@@ -140,10 +140,10 @@ void DisconnectUser(ENetPeer *peer)
       if (obj->client_id == users[i].player_id)
         obj->Destroy();
 
-    for (int j = i; j < users_count - 1; j++)
+    for (int j = i; j < client_count - 1; j++)
       users[j] = users[j + 1];
 
-    users_count--;
+    client_count--;
     break;
   }
   peer->data = NULL;

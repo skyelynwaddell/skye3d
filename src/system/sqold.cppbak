@@ -370,7 +370,7 @@ SQInteger sq_send_packet_number(HSQUIRRELVM vm)
         Net_ToSQClient(my_local_player_id, name_str, (float)val);
       }
       // Send to all remote clients
-      for (int i = 0; i < users_count; i++)
+      for (int i = 0; i < client_count; i++)
       {
         if (users[i].peer && users[i].player_id != my_local_player_id)
         {
@@ -442,7 +442,7 @@ SQInteger sq_send_packet_vector3(HSQUIRRELVM vm)
       {
         Net_ToSQClient(my_local_player_id, name_str, vec);
       }
-      for (int i = 0; i < users_count; i++)
+      for (int i = 0; i < client_count; i++)
       {
         if (users[i].peer && users[i].player_id != my_local_player_id)
         {

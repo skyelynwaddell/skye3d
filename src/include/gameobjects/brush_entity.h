@@ -25,6 +25,7 @@ public:
   Model brush_model = {};
   bool has_model = false;
   int clipnode_root = -1;
+  Vector3 spawn_origin = {0, 0, 0};
 
   Model cube;
 
@@ -39,9 +40,13 @@ public:
     brush_model = data.model;
     has_model = data.has_model;
     clipnode_root = data.clipnode_root;
+    spawn_origin = data.origin;
 
     bsp_collider.entity_hulls.push_back({clipnode_root,
-                                         &position});
+                                         &position,
+                                         data.origin});
+
+    printf("BRUSH ENTITY CREATED: %p | Class: %s\n", (void *)this, classname.c_str());
   }
 
   // Read a tag value, returns fallback if not present
@@ -51,13 +56,20 @@ public:
     return it != tags.end() ? it->second : fallback;
   }
 
+  void Update() override
+  {
+    GameObject3D::Update();
+  };
+
   void Draw() override
   {
-    if (has_model)
+    if (has_model && !classname.starts_with("trigger"))
     {
-      if (classname.starts_with("trigger") == false)
-        DrawModel(brush_model, position, 1.0f, WHITE);
-      DrawModelWires(brush_model, position, 1.0f, RED);
+      Vector3 offset = Vector3Subtract(position, spawn_origin);
+
+      // Draw the model using the offset to move the baked vertices
+      DrawModel(brush_model, offset, 1.0f, WHITE);
+      DrawModelWires(brush_model, offset, 1.0f, RED);
     }
   }
 
@@ -65,37 +77,6 @@ public:
   {
     if (has_model)
     {
-      // DrawModelWires(brush_model, position, 1, RED);
-      // for (int m = 0; m < brush_model.meshCount; m++)
-      // {
-      //   Mesh mesh = brush_model.meshes[m];
-
-      //   for (int t = 0; t < mesh.triangleCount; t++)
-      //   {
-      //     int i0 = mesh.indices[t * 3 + 0];
-      //     int i1 = mesh.indices[t * 3 + 1];
-      //     int i2 = mesh.indices[t * 3 + 2];
-
-      //     Vector3 v0 = {
-      //         mesh.vertices[i0 * 3 + 0],
-      //         mesh.vertices[i0 * 3 + 1],
-      //         mesh.vertices[i0 * 3 + 2]};
-
-      //     Vector3 v1 = {
-      //         mesh.vertices[i1 * 3 + 0],
-      //         mesh.vertices[i1 * 3 + 1],
-      //         mesh.vertices[i1 * 3 + 2]};
-
-      //     Vector3 v2 = {
-      //         mesh.vertices[i2 * 3 + 0],
-      //         mesh.vertices[i2 * 3 + 1],
-      //         mesh.vertices[i2 * 3 + 2]};
-
-      //     DrawLine3D(v0, v1, RED);
-      //     DrawLine3D(v1, v2, RED);
-      //     DrawLine3D(v2, v0, RED);
-      //   }
-      // }
     }
   }
 

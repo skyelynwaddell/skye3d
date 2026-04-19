@@ -1,7 +1,6 @@
 #pragma once
 #include "enet.h"
 #include "global.h"
-#include "sq.h"
 #include "engine.h"
 #include "camera3d.h"
 #include <raylib.h>
@@ -35,7 +34,7 @@ class GameObject3D
 public:
   virtual ~GameObject3D() = default;
   int client_id = -1; // multiplayer client id only for player objects
-  int net_id = 0;     // unique identifier for replication
+  bool needs_sync = true;
   bool is_me = false;
   bool destroy_me = false;
   std::string classname = "";
@@ -43,6 +42,7 @@ public:
   std::string target = "";
   Vector3 velocity = {0.0f, 0.0f, 0.0f};
   Vector3 position = {0.0f, 0.0f, 0.0f};
+  Vector3 last_position = {0.0f, 0.0f, 0.0f};
   Vector3 collision_offset = {0.0f, 0.0f, 0.0f};
   Vector3 collision_box = {0.5f, 0.6f, 0.5f};
   Vector3 size = {0.5f, 0.6f, 0.5f};
@@ -51,16 +51,22 @@ public:
   int sendflags = 0;
   std::unordered_map<std::string, ScriptValue> script_vars;
 
-  HSQOBJECT server_think_func;
   bool has_server_think = false;
-  HSQOBJECT client_think_func;
   bool has_client_think = false;
 
   void Destroy() { destroy_me = true; };
   bool IsMoving() { return Vector3Length(velocity) > 0.01f; };
 
   // overrides
-  virtual void Update() {};
+  virtual void Update()
+  {
+    if (global_is_hosting)
+    {
+      if (Vector3Equals(position, last_position) == false)
+        needs_sync = true;
+      last_position = position;
+    }
+  };
   virtual void Draw()
   {
     if (global_show_collisions)
@@ -194,7 +200,6 @@ T *InstanceFindByTargetName(std::string target_name)
 InstanceCreate
 usage: Player* player = InstanceCreate<Player>({ spawn_x, spawn_y });
 */
-inline int net_id = 0;
 template <class T, class... Args>
   requires(std::is_base_of_v<GameObject3D, T>)
 T *InstanceCreate(Vector3 spawn_pos, Args &&...args)
@@ -202,8 +207,6 @@ T *InstanceCreate(Vector3 spawn_pos, Args &&...args)
   auto obj = std::make_unique<T>(std::forward<Args>(args)...);
   T *ptr = obj.get();
   ptr->position = spawn_pos;
-  net_id++;
-  ptr->net_id = net_id;
   gameobjects.push_back(std::move(obj));
   return ptr;
 };
