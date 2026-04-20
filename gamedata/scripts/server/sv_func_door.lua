@@ -3,13 +3,13 @@
 function func_door_think(self, dt)
   local is_open = self:get("open")
 
-  -- opening
   if is_open then
+    -- opening
     local pos = self:get_position()
     pos.y = pos.y - 0.01
     self:set_position(pos.x, pos.y, pos.z)
-  else -- closing
-
+  else
+    -- closing
   end
 end
 

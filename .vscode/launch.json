@@ -11,11 +11,11 @@
       "program": "${workspaceFolder}/build-win/bin/game.exe",
       "args": [],
       "stopAtEntry": false,
-      "cwd": "${workspaceFolder}", // <--- CHANGE THIS
+      "cwd": "${workspaceFolder}",
       "environment": [],
       "externalConsole": false,
       "MIMode": "gdb",
-      "miDebuggerPath": "C:\\msys64\\mingw64\\bin\\gdb.exe", // Ensure full path with C:
+      "miDebuggerPath": "C:\\msys64\\mingw64\\bin\\gdb.exe",
       "setupCommands": [
         {
           "description": "Enable pretty-printing for gdb",
