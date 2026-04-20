@@ -1,9 +1,10 @@
 # Skye3D
 
-A **server-client 3D multiplayer game engine** built with C++, Raylib for rendering, and Squirrel for scripting.
+A **server-client 3D multiplayer game engine** built with C++, Raylib for rendering, and LUA for scripting.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Language](https://img.shields.io/badge/language-C%2B%2B23-purple.svg)
+![Language](https://img.shields.io/badge/scripting-LUA-magenta.svg)
 ![Framework](https://img.shields.io/badge/Raylib-orange.svg)
 ![Framework](https://img.shields.io/badge/SDL-green.svg)
 ![Framework](https://img.shields.io/badge/GLFW-darkred.svg)
@@ -13,12 +14,12 @@ A **server-client 3D multiplayer game engine** built with C++, Raylib for render
 
 ## Documentation
 
-| Resource                                                                           | Description                      |
-| ---------------------------------------------------------------------------------- | -------------------------------- |
-| [Scripting Docs](gamedata/docs.md)                                                 | Squirrel scripting API reference |
-| [BSP File Spec](SPEC.md)                                                           | BSP format documentation         |
-| [Quake Specs](https://www.gamers.org/dEngine/quake/spec/quake-spec34/qkspec_4.htm) | Quake format documentation       |
-| [Quake Level Viewer](https://github.com/bytesiz3d/quake-level-viewer)              | Level loading reference          |
+| Resource                                                                           | Description                 |
+| ---------------------------------------------------------------------------------- | --------------------------- |
+| [Scripting Docs](gamedata/docs.md)                                                 | LUA scripting API reference |
+| [BSP File Spec](SPEC.md)                                                           | BSP format documentation    |
+| [Quake Specs](https://www.gamers.org/dEngine/quake/spec/quake-spec34/qkspec_4.htm) | Quake format documentation  |
+| [Quake Level Viewer](https://github.com/bytesiz3d/quake-level-viewer)              | Level loading reference     |
 
 ---
 
@@ -31,7 +32,7 @@ A **server-client 3D multiplayer game engine** built with C++, Raylib for render
 - [ENet](#)
 - [ImGui](#)
 - [rlImGui](#)
-- [squirrel](#)
+- [lua & sol2](#)
 
 ### Build
 
@@ -82,11 +83,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-## Acknowledgments
+## This wouldn't be possible without the following
 
+- [QuakeWorld](https://github.com/id-software/quake) — Created by id Software as an online version of the original Quake
 - [Raylib](https://www.raylib.com/) — Simple and easy-to-use library for game programming
 - [ENet](http://enet.bespin.org/) — Reliable UDP networking library
-- [Squirrel](http://squirrel-lang.org/) — High-level scripting language
+- [Lua](https://www.lua.org/) — High-level scripting language
+- [sol2](https://github.com/ThePhd/sol2) — Lua-to-C++ Bindings
 - [Quake Level Viewer](https://github.com/bytesiz3d/quake-level-viewer) — Reference implementation
 
 ---
