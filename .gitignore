@@ -1,3 +1,6 @@
 *.exe
 /build-win/*
 !/build-win/bin/
+*.dm4.bsp
+*.e1m1.bsp
+*.e1m2.bsp
