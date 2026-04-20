@@ -291,6 +291,15 @@ static void register_enums(sol::state &lua)
   ga["RIGHT_TRIGGER"] = 5;
 }
 
+static void register_lua_types(sol::state &lua)
+{
+  lua.new_usertype<Vector3>(
+      "Vector3",
+      "x", &Vector3::x,
+      "y", &Vector3::y,
+      "z", &Vector3::z);
+};
+
 // -----------------------------------------------------------------------
 // GameObject3D usertype
 // -----------------------------------------------------------------------
@@ -299,6 +308,8 @@ static void register_enums(sol::state &lua)
 // script passes to set_think is bound to the VM that registered it.
 static void register_gameobject3d_usertype(sol::state &lua, bool is_server)
 {
+  register_lua_types(lua);
+
   lua.new_usertype<GameObject3D>(
       "GameObject3D",
       sol::no_constructor,
@@ -311,6 +322,14 @@ static void register_gameobject3d_usertype(sol::state &lua, bool is_server)
       "target_name", &GameObject3D::target_name,
       "target", &GameObject3D::target,
       "sendflags", &GameObject3D::sendflags,
+      "angle", &GameObject3D::angle,
+      "spawnflags", &GameObject3D::spawnflags,
+      "position", &GameObject3D::position,
+      "velocity", &GameObject3D::velocity,
+      "size", &GameObject3D::size,
+      "acceleration", &GameObject3D::acceleration,
+      "speed", &GameObject3D::speed,
+      "collision_box", &GameObject3D::collision_box,
 
       // ----- generic script_vars interface (maps to set()/get()) -----
       "set", [](GameObject3D &self, const std::string &key, sol::object value)
@@ -319,11 +338,15 @@ static void register_gameobject3d_usertype(sol::state &lua, bool is_server)
           self.script_vars[key] = *sv; },
       "get", [](GameObject3D &self, const std::string &key, sol::this_state ts) -> sol::object
       {
-        sol::state_view lv(ts);
-        auto it = self.script_vars.find(key);
-        if (it == self.script_vars.end())
-          return sol::lua_nil;
-        return ScriptValueToLua(lv, it->second); },
+    sol::state_view lua(ts);
+    auto it = self.script_vars.find(key);
+
+    if (it == self.script_vars.end())
+    {
+        return sol::lua_nil; 
+    }
+    
+    return ScriptValueToLua(lua, it->second); },
 
       // ----- lifecycle -----
       "destroy", [](GameObject3D &self)
@@ -342,6 +365,26 @@ static void register_gameobject3d_usertype(sol::state &lua, bool is_server)
       { return self.target; },
       "set_target", [](GameObject3D &self, const std::string &v)
       { self.target = v; },
+
+      // Distance Checks
+      "find_closest_object", [](GameObject3D &self, double max_dist)
+      { return self.FindClosestObject(static_cast<float>(max_dist)); },
+
+      // Trigger effects
+      "set_trigger", [](GameObject3D &self, sol::main_protected_function fn)
+      {
+    if (!fn.valid()) return;
+    // Capture fn by value; sol::main_function is designed for cross-state/long-term storage
+    self.on_trigger_fn = [fn](GameObject3D *obj) mutable {
+        if (!obj) return;
+        auto result = fn(obj);
+        if (!result.valid()) {
+            sol::error err = result;
+            std::cerr << "LUA Trigger Error: " << err.what() << std::endl;
+        }
+    }; },
+      "on_trigger", [](GameObject3D &self)
+      { self.OnTrigger(); },
 
       // ----- position -----
       "set_position", [](GameObject3D &self, double x, double y, double z)

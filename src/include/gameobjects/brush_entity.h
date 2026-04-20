@@ -45,6 +45,8 @@ public:
                                          data.origin});
 
     printf("BRUSH ENTITY CREATED: %p | Class: %s\n", (void *)this, classname.c_str());
+    printf("  Spawn Origin: (%.2f, %.2f, %.2f)\n", spawn_origin.x, spawn_origin.y, spawn_origin.z);
+    printf("  Position: (%.2f, %.2f, %.2f)\n", position.x, position.y, position.z);
   }
 
   // Read a tag value, returns fallback if not present
@@ -53,6 +55,27 @@ public:
     auto it = tags.find(key);
     return it != tags.end() ? it->second : fallback;
   }
+
+  Vector3 GetInteractCenter() override
+  {
+    if (has_model)
+    {
+      BoundingBox box = GetModelBoundingBox(brush_model);
+      Vector3 center = {
+          (box.min.x + box.max.x) * 0.5f,
+          (box.min.y + box.max.y) * 0.5f,
+          (box.min.z + box.max.z) * 0.5f};
+
+      // Add the entity's current position (not delta)
+      return Vector3Add(center, position);
+    }
+    return position;
+  }
+
+  void OnTrigger() override
+  {
+    GameObject3D::OnTrigger();
+  };
 
   void Update() override
   {

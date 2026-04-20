@@ -45,6 +45,8 @@ public:
   int sendflags = 0;
   int spawnflags = 0;
   float angle = 0;
+  int leaf_id = 0;
+  std::function<void(GameObject3D *)> on_trigger_fn;
 
   std::unordered_map<std::string, ScriptValue> script_vars;
 
@@ -65,13 +67,23 @@ public:
       velocity = {0, 0, 0};
   };
 
+  virtual Vector3 GetInteractCenter()
+  {
+    return position;
+  }
+
+  GameObject3D *FindClosestObject(float max_dist);
+
   // overrides
   virtual void Update()
   {
     if (global_is_hosting)
     {
       if (Vector3Equals(position, last_position) == false)
+      {
+        leaf_id = bsp_renderer.FindLeaf(position);
         needs_sync = true;
+      }
       last_position = position;
     }
   };
@@ -89,6 +101,15 @@ public:
       rlPopMatrix();
     }
   };
+
+  virtual void OnTrigger()
+  {
+    if (this && this->on_trigger_fn)
+    {
+      this->on_trigger_fn(this);
+    }
+  };
+
   virtual void DrawDebug() {};
   virtual void DrawGUI() {};
   virtual void CleanUp() {};

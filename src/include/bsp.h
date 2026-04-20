@@ -2114,7 +2114,7 @@ inline std::vector<BSP_BrushEntityData> BSP_SpawnBrushEntities()
       model_key = entity.tags.at("model");
       if (!model_key.empty() && model_key[0] == '*')
         is_brush = true;
-        
+
       if (!is_brush)
         continue;
     }

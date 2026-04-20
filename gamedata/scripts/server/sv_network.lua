@@ -1,7 +1,5 @@
 -- sv_network.lua
 -- table to map packet names to functions
-_G.lastpos = 83
-_G.index = 0
 
 packet_funcs = {
 
@@ -16,14 +14,36 @@ packet_funcs = {
     local cid = math.tointeger(packet.client_id)
     local val = math.tointeger(packet.value)
 
-    local obj = instance_create(0, 0, 0)
-    obj:set_position(_G.lastpos - (1 * _G.index), 20, 74)
-    _G.index = _G.index + 1
-
-    if cid and val then
-      sendflags_sync(cid, val)
-    else
+    if not cid or not val then
       print("Warning: Received non-integer network flags!")
+      return
+    end
+
+    sendflags_sync(cid, val)
+
+    -- Interact
+    if (val & SENDFLAG_INTERACT) ~= 0 then
+      local player = get_player_instance(cid)
+      if not player then
+        print("error: no player instance for cid " .. cid .. "\n")
+        return
+      end
+
+      local interact_dist = 100
+      local obj = player:find_closest_object(interact_dist)
+
+      if obj then
+        local name = obj:get_classname()
+        local obj_pos = obj:get_position()
+        print("found object " .. tostring(obj) .. " " .. name .. " \n")
+        print("  Player position: " .. tostring(player:get_position()) .. "\n")
+        print("  Object position: " .. tostring(obj_pos) .. "\n")
+        if obj:get_classname() == "func_door" then
+          obj:on_trigger()
+        end
+      else
+        print("interact pressed, no obj found within dist " .. interact_dist .. "\n")
+      end
     end
   end,
 

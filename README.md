@@ -2,7 +2,7 @@
 
 A **server-client 3D multiplayer game engine** built with C++, Raylib for rendering, and LUA for scripting.
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![License](https://img.shields.io/badge/license-GPL-blue.svg)
 ![Language](https://img.shields.io/badge/language-C%2B%2B23-purple.svg)
 ![Language](https://img.shields.io/badge/scripting-LUA-magenta.svg)
 ![Framework](https://img.shields.io/badge/Raylib-orange.svg)
@@ -60,7 +60,7 @@ edit `settings.cfg` > set 'is_hosting=false'
 ## Project Structure
 
 ```
-sky3d/
+skye3d/
 ├── gamedata/
 │   ├── scripts/
 │   │   ├── client/       # Client-side scripts
@@ -79,7 +79,7 @@ sky3d/
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GPL License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
