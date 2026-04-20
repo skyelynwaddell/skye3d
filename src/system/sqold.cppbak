@@ -62,7 +62,7 @@ static Color SQGetColor(HSQUIRRELVM v, SQInteger index)
       return (unsigned char)val;
     }
     sq_pop(v, 1);
-    return 0;
+    return sq_throwerror(v, "No Value Returned!");
   };
 
   c.r = get_field("r");
@@ -86,6 +86,67 @@ static Color SQGetColor(HSQUIRRELVM v, SQInteger index)
   return c;
 };
 
+SQInteger sq_instance_is_valid(HSQUIRRELVM vm)
+{
+  GameObject3D **ud = nullptr;
+  if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)))
+  {
+    sq_pushbool(vm, SQFalse);
+    return 1;
+  }
+  bool valid = ud && *ud && !(*ud)->destroy_me;
+  sq_pushbool(vm, valid ? SQTrue : SQFalse);
+  return 1;
+};
+
+SQInteger sq_instance_set_think(HSQUIRRELVM vm)
+{
+  // 1. Get the UserPointer (Double Pointer)
+  GameObject3D **ud = nullptr;
+  if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)) || !ud || !*ud)
+  {
+    return sq_throwerror(vm, "Invalid GameObject3D instance");
+  }
+
+  GameObject3D *obj = *ud;
+
+  // 2. Check if we are providing a function or null (to disable thinking)
+  SQObjectType type = sq_gettype(vm, 2);
+
+  if (type == OT_CLOSURE || type == OT_NATIVECLOSURE || type == OT_NULL)
+  {
+    // Select the correct VM target
+    bool is_server = (vm == server_vm);
+    HSQOBJECT &target_func = is_server ? obj->server_think_func : obj->client_think_func;
+    bool &target_has = is_server ? obj->has_server_think : obj->has_client_think;
+
+    // 3. Clean up previous reference to avoid memory leaks
+    if (target_has)
+    {
+      sq_release(vm, &target_func);
+      sq_resetobject(&target_func);
+    }
+
+    if (type == OT_NULL)
+    {
+      target_has = false;
+    }
+    else
+    {
+      // 4. Store the new function
+      target_has = true;
+      sq_getstackobj(vm, 2, &target_func);
+      sq_addref(vm, &target_func); // Keep it alive
+    }
+  }
+  else
+  {
+    return sq_throwerror(vm, "set_think expects a function or null");
+  }
+
+  return 0;
+}
+
 // Helper to wrap a C++ pointer into a Squirrel Userdata with the method delegate
 static void PushGameObjectAsUserdata(HSQUIRRELVM vm, GameObject3D *obj)
 {
@@ -102,10 +163,14 @@ static void PushGameObjectAsUserdata(HSQUIRRELVM vm, GameObject3D *obj)
   };
 
   // functions callable from an instance
+  bindfunc("set_think", sq_instance_set_think);
   bindfunc("_get", sq_instance_get); // allows us to attach functions to the returned object
   bindfunc("get", sq_instance_get_var);
   bindfunc("set", sq_instance_set_var);
   bindfunc("destroy", sq_instance_destroy);
+  bindfunc("is_valid", sq_instance_is_valid);
+  bindfunc("get_classname", sq_instance_get_classname);
+  bindfunc("set_classname", sq_instance_set_classname);
   bindfunc("get_target_name", sq_instance_get_target_name);
   bindfunc("set_target_name", sq_instance_set_target_name);
   bindfunc("get_target", sq_instance_get_target);
@@ -122,6 +187,7 @@ static void PushGameObjectAsUserdata(HSQUIRRELVM vm, GameObject3D *obj)
   bindfunc("get_size", sq_instance_get_size);
   bindfunc("set_collision_box", sq_instance_set_collision_box);
   bindfunc("get_collision_box", sq_instance_get_collision_box);
+  bindfunc("print", sq_instance_print);
 
   sq_setdelegate(vm, -2); // Set table as delegate for userdata
 }
@@ -230,7 +296,7 @@ Returns the camera position as a {x, y, z} table.
 SQInteger sq_get_camera_position(HSQUIRRELVM vm)
 {
   if (!camera)
-    return 0;
+    return sq_throwerror(vm, "No Value Returned!");
 
   sq_newtable(vm);
 
@@ -304,7 +370,7 @@ SQInteger sq_send_packet_number(HSQUIRRELVM vm)
         Net_ToSQClient(my_local_player_id, name_str, (float)val);
       }
       // Send to all remote clients
-      for (int i = 0; i < users_count; i++)
+      for (int i = 0; i < client_count; i++)
       {
         if (users[i].peer && users[i].player_id != my_local_player_id)
         {
@@ -376,7 +442,7 @@ SQInteger sq_send_packet_vector3(HSQUIRRELVM vm)
       {
         Net_ToSQClient(my_local_player_id, name_str, vec);
       }
-      for (int i = 0; i < users_count; i++)
+      for (int i = 0; i < client_count; i++)
       {
         if (users[i].peer && users[i].player_id != my_local_player_id)
         {
@@ -475,7 +541,7 @@ SQInteger sq_is_mouse_button_pressed(HSQUIRRELVM vm)
     sq_pushbool(vm, IsMouseButtonPressed(static_cast<int>(key)) ? SQTrue : SQFalse);
     return 1;
   }
-  return sq_throwerror(vm, "Invalid key code");
+  return 0;
 };
 
 /*
@@ -491,7 +557,7 @@ SQInteger sq_is_mouse_button_down(HSQUIRRELVM vm)
     sq_pushbool(vm, IsMouseButtonDown(static_cast<int>(key)) ? SQTrue : SQFalse);
     return 1;
   }
-  return sq_throwerror(vm, "Invalid key code");
+  return 0;
 };
 
 /*
@@ -507,7 +573,7 @@ SQInteger sq_is_mouse_button_released(HSQUIRRELVM vm)
     sq_pushbool(vm, IsMouseButtonReleased(static_cast<int>(key)) ? SQTrue : SQFalse);
     return 1;
   }
-  return sq_throwerror(vm, "Invalid key code");
+  return 0;
 };
 
 /*
@@ -521,7 +587,7 @@ SQInteger sq_is_mouse_button_up(HSQUIRRELVM vm)
     sq_pushbool(vm, IsMouseButtonUp(static_cast<int>(key)) ? SQTrue : SQFalse);
     return 1;
   }
-  return sq_throwerror(vm, "Invalid key code");
+  return 0;
 };
 
 /*
@@ -857,7 +923,7 @@ SQInteger sq_draw_fps(HSQUIRRELVM vm)
   {
     global_draw_fps = true;
     global_fps_x = x;
-    global_fps_x = y;
+    global_fps_y = y;
   }
   return 0;
 };
@@ -1181,7 +1247,7 @@ SQInteger sq_instance_destroy(HSQUIRRELVM vm)
 {
   GameObject3D **ud = nullptr;
   if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)))
-    return sq_throwerror(vm, "Invalid object instance");
+    return sq_throwerror(vm, "No Value Returned!");
 
   if (ud && *ud)
   {
@@ -1195,16 +1261,47 @@ SQInteger sq_instance_destroy(HSQUIRRELVM vm)
 /* Instance Get */
 SQInteger sq_instance_get(HSQUIRRELVM vm)
 {
+  GameObject3D **ud = nullptr;
+
+  if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)) || !ud || !*ud)
+    return sq_throwerror(vm, "Invalid instance");
+
+  const SQChar *key;
+  if (SQ_FAILED(sq_getstring(vm, 2, &key)))
+    return sq_throwerror(vm, "Key must be string");
+
+  // 1. Check C++ script_vars
+  auto it = (*ud)->script_vars.find(key);
+  if (it != (*ud)->script_vars.end())
+  {
+    std::visit([vm](auto &&arg)
+               {
+        using T = std::decay_t<decltype(arg)>;
+        if constexpr (std::is_same_v<T, std::string>)
+            sq_pushstring(vm, arg.c_str(), -1);
+        else if constexpr (std::is_same_v<T, float>)
+            sq_pushfloat(vm, arg);
+        else if constexpr (std::is_same_v<T, int>)
+            sq_pushinteger(vm, arg);
+        else if constexpr (std::is_same_v<T, bool>)
+            sq_pushbool(vm, arg ? SQTrue : SQFalse); },
+               it->second);
+
+    return 1;
+  }
+
+  // 2. fallback to root table (for functions like func_door_think)
   sq_pushroottable(vm);
   sq_push(vm, 2);
 
   if (SQ_SUCCEEDED(sq_get(vm, -2)))
   {
+    sq_remove(vm, -2);
     return 1;
   }
 
-  sq_pop(vm, 1);
-  return sq_throwerror(vm, "Member or Function not found");
+  sq_pop(vm, 1); // pop root
+  return SQ_ERROR;
 };
 
 /* Get - Set Var */
@@ -1282,7 +1379,7 @@ SQInteger sq_instance_set_position(HSQUIRRELVM vm)
 {
   GameObject3D **ud = nullptr;
   if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)))
-    return sq_throwerror(vm, "Invalid object instance");
+    return sq_throwerror(vm, "No Value Returned!");
 
   SQFloat x, y, z;
   sq_getfloat(vm, 2, &x);
@@ -1300,7 +1397,7 @@ SQInteger sq_instance_get_position(HSQUIRRELVM vm)
 {
   GameObject3D **ud = nullptr;
   if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)))
-    return sq_throwerror(vm, "Invalid object instance");
+    return sq_throwerror(vm, "No Value Returned!");
 
   if (ud && *ud)
   {
@@ -1326,6 +1423,64 @@ SQInteger sq_instance_get_position(HSQUIRRELVM vm)
     return 1;
   }
 
+  return sq_throwerror(vm, "No Value Returned!");
+};
+
+SQInteger sq_instance_print(HSQUIRRELVM vm)
+{
+  SQInteger nargs = sq_gettop(vm);
+  const SQChar *s = nullptr;
+
+  // Method call: [Userdata, String] -> nargs is 2, string is at 2
+  // Global call: [String]           -> nargs is 1, string is at 1
+  if (nargs >= 1)
+  {
+    // Try to get the string from the top-most position
+    if (SQ_SUCCEEDED(sq_getstring(vm, nargs, &s)))
+    {
+      if (s != nullptr) // Extra safety check
+      {
+        printf("[%s]: ", (vm == server_vm ? "SERVER" : "CLIENT"));
+        fputs(s, stdout);
+        printf("\n");
+      }
+    }
+    else
+    {
+      // If we get here, Squirrel tried to print something that WASN'T a string
+      // (likely a failed concatenation result)
+      printf("[%s]: <SCRIPT ERROR: print() received non-string value>\n",
+             (vm == server_vm ? "SERVER" : "CLIENT"));
+    }
+  }
+  return 0;
+}
+
+/*  className*/
+SQInteger sq_instance_get_classname(HSQUIRRELVM vm)
+{
+  GameObject3D **ud = nullptr;
+  if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)) || !ud || !*ud)
+  {
+    sq_pushstring(vm, "", -1);
+    return 1;
+  }
+  sq_pushstring(vm, (*ud)->classname.c_str(), -1);
+  return 1;
+};
+
+SQInteger sq_instance_set_classname(HSQUIRRELVM vm)
+{
+  GameObject3D **ud = nullptr;
+  const SQChar *name = nullptr;
+
+  if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)) || !ud || !*ud)
+    return sq_throwerror(vm, "No Value Returned!");
+
+  if (SQ_FAILED(sq_getstring(vm, 2, &name)))
+    return sq_throwerror(vm, "Argument 1 must be a string");
+
+  (*ud)->classname = name;
   return 0;
 };
 
@@ -1334,7 +1489,7 @@ SQInteger sq_instance_get_target_name(HSQUIRRELVM vm)
 {
   GameObject3D **ud = nullptr;
   if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)) || !ud || !*ud)
-    return sq_throwerror(vm, "Invalid object instance");
+    return sq_throwerror(vm, "No Value Returned!");
 
   sq_pushstring(vm, (*ud)->target_name.c_str(), -1);
   return 1;
@@ -1346,7 +1501,7 @@ SQInteger sq_instance_set_target_name(HSQUIRRELVM vm)
   const SQChar *name = nullptr;
 
   if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)) || !ud || !*ud)
-    return sq_throwerror(vm, "Invalid object instance");
+    return sq_throwerror(vm, "No Value Returned!");
 
   if (SQ_FAILED(sq_getstring(vm, 2, &name)))
     return sq_throwerror(vm, "Argument 1 must be a string");
@@ -1360,7 +1515,7 @@ SQInteger sq_instance_get_target(HSQUIRRELVM vm)
 {
   GameObject3D **ud = nullptr;
   if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)) || !ud || !*ud)
-    return sq_throwerror(vm, "Invalid object instance");
+    return sq_throwerror(vm, "No Value Returned!");
 
   sq_pushstring(vm, (*ud)->target.c_str(), -1);
   return 1;
@@ -1372,7 +1527,7 @@ SQInteger sq_instance_set_target(HSQUIRRELVM vm)
   const SQChar *target_str = nullptr;
 
   if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)) || !ud || !*ud)
-    return sq_throwerror(vm, "Invalid object instance");
+    return sq_throwerror(vm, "No Value Returned!");
 
   if (SQ_FAILED(sq_getstring(vm, 2, &target_str)))
     return sq_throwerror(vm, "Argument 1 must be a string");
@@ -1386,7 +1541,7 @@ SQInteger sq_instance_get_velocity(HSQUIRRELVM vm)
 {
   GameObject3D **ud = nullptr;
   if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)) || !ud || !*ud)
-    return sq_throwerror(vm, "Invalid object instance");
+    return sq_throwerror(vm, "No Value Returned!");
 
   sq_newtable(vm);
   sq_pushstring(vm, "x", -1);
@@ -1406,7 +1561,7 @@ SQInteger sq_instance_set_velocity(HSQUIRRELVM vm)
   GameObject3D **ud = nullptr;
   SQFloat x, y, z;
   if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)) || !ud || !*ud)
-    return sq_throwerror(vm, "Invalid object instance");
+    return sq_throwerror(vm, "No Value Returned!");
 
   if (SQ_SUCCEEDED(sq_getfloat(vm, 2, &x)) && SQ_SUCCEEDED(sq_getfloat(vm, 3, &y)) && SQ_SUCCEEDED(sq_getfloat(vm, 4, &z)))
   {
@@ -1421,7 +1576,7 @@ SQInteger sq_instance_get_size(HSQUIRRELVM vm)
 {
   GameObject3D **ud = nullptr;
   if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)) || !ud || !*ud)
-    return sq_throwerror(vm, "Invalid object instance");
+    return sq_throwerror(vm, "No Value Returned!");
 
   sq_newtable(vm);
   sq_pushstring(vm, "x", -1);
@@ -1441,7 +1596,7 @@ SQInteger sq_instance_set_size(HSQUIRRELVM vm)
   GameObject3D **ud = nullptr;
   SQFloat x, y, z;
   if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)) || !ud || !*ud)
-    return sq_throwerror(vm, "Invalid object instance");
+    return sq_throwerror(vm, "No Value Returned!");
 
   if (SQ_SUCCEEDED(sq_getfloat(vm, 2, &x)) && SQ_SUCCEEDED(sq_getfloat(vm, 3, &y)) && SQ_SUCCEEDED(sq_getfloat(vm, 4, &z)))
   {
@@ -1456,7 +1611,7 @@ SQInteger sq_instance_get_acceleration(HSQUIRRELVM vm)
 {
   GameObject3D **ud = nullptr;
   if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)) || !ud || !*ud)
-    return sq_throwerror(vm, "Invalid object instance");
+    return sq_throwerror(vm, "No Value Returned!");
 
   sq_pushfloat(vm, (*ud)->acceleration);
   return 1;
@@ -1467,7 +1622,7 @@ SQInteger sq_instance_set_acceleration(HSQUIRRELVM vm)
   GameObject3D **ud = nullptr;
   SQFloat acc;
   if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)) || !ud || !*ud)
-    return sq_throwerror(vm, "Invalid object instance");
+    return sq_throwerror(vm, "No Value Returned!");
 
   if (SQ_SUCCEEDED(sq_getfloat(vm, 2, &acc)))
   {
@@ -1482,7 +1637,7 @@ SQInteger sq_instance_get_speed(HSQUIRRELVM vm)
 {
   GameObject3D **ud = nullptr;
   if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)) || !ud || !*ud)
-    return sq_throwerror(vm, "Invalid object instance");
+    return sq_throwerror(vm, "No Value Returned!");
 
   sq_pushfloat(vm, (*ud)->speed);
   return 1;
@@ -1493,7 +1648,7 @@ SQInteger sq_instance_set_speed(HSQUIRRELVM vm)
   GameObject3D **ud = nullptr;
   SQFloat s;
   if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)) || !ud || !*ud)
-    return sq_throwerror(vm, "Invalid object instance");
+    return sq_throwerror(vm, "No Value Returned!");
 
   if (SQ_SUCCEEDED(sq_getfloat(vm, 2, &s)))
   {
@@ -1508,7 +1663,7 @@ SQInteger sq_instance_get_collision_box(HSQUIRRELVM vm)
 {
   GameObject3D **ud = nullptr;
   if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)) || !ud || !*ud)
-    return sq_throwerror(vm, "Invalid object instance");
+    return sq_throwerror(vm, "No Value Returned!");
 
   sq_newtable(vm);
   sq_pushstring(vm, _SC("width"), -1);
@@ -1529,7 +1684,7 @@ SQInteger sq_instance_set_collision_box(HSQUIRRELVM vm)
   GameObject3D **ud = nullptr;
   SQFloat x, y, z;
   if (SQ_FAILED(sq_getuserdata(vm, 1, (SQUserPointer *)&ud, nullptr)) || !ud || !*ud)
-    return sq_throwerror(vm, "Invalid object instance");
+    return sq_throwerror(vm, "No Value Returned!");
 
   if (SQ_SUCCEEDED(sq_getfloat(vm, 2, &x)) &&
       SQ_SUCCEEDED(sq_getfloat(vm, 3, &y)) &&
@@ -1633,12 +1788,17 @@ void sqRunFunc(HSQUIRRELVM vm, const char *func_name, float dt)
   if (!vm)
     return;
 
+  // Save stack top so we can always restore it cleanly on success or error.
+  // sq_call with raiseerror=SQTrue does NOT pop args on failure, so a plain
+  // sq_pop(vm, 2) after a failed call leaves garbage on the stack → crash.
+  SQInteger saved_top = sq_gettop(vm);
+
   sq_pushroottable(vm);
   sq_pushstring(vm, _SC(func_name), -1);
 
   if (SQ_FAILED(sq_get(vm, -2)))
   {
-    sq_pop(vm, 1);
+    sq_settop(vm, saved_top);
     return;
   }
 
@@ -1652,7 +1812,8 @@ void sqRunFunc(HSQUIRRELVM vm, const char *func_name, float dt)
     sq_call(vm, 2, SQFalse, SQTrue);
   }
 
-  sq_pop(vm, 2);
+  // Always restore — works whether the call succeeded or failed
+  sq_settop(vm, saved_top);
 };
 
 // -----------------------------------------------------------------------
@@ -1692,13 +1853,26 @@ void sqPrintFunc_Client(HSQUIRRELVM /*vm*/, const SQChar *s, ...)
 /*
 sqErrorFunc
 Called on runtime errors in any VM.
+Prints to both stderr and stdout so it's always visible.
 */
 void sqErrorFunc(HSQUIRRELVM /*vm*/, const SQChar *s, ...)
 {
+  printf("[SCRIPT ERROR]: ");
   va_list args;
   va_start(args, s);
-  vfprintf(stderr, s, args);
+  vprintf(s, args);
   va_end(args);
+  printf("\n");
+  fflush(stdout);
+
+  // Also write to stderr for good measure
+  fprintf(stderr, "[SCRIPT ERROR]: ");
+  va_list args2;
+  va_start(args2, s);
+  vfprintf(stderr, s, args2);
+  va_end(args2);
+  fprintf(stderr, "\n");
+  fflush(stderr);
 };
 
 /*
@@ -1722,23 +1896,29 @@ void sqCompilerErrorHandler(HSQUIRRELVM /*v*/, const SQChar *desc, const SQChar 
 sqCallEntitySpawnerInVM
 Calls a BSP entity spawner function in a specific VM if it exists.
 */
-static void sqCallEntitySpawnerInVM(HSQUIRRELVM vm, const std::string &classname, Vector3 origin, const std::unordered_map<std::string, std::string> &tags)
+static void sqCallEntitySpawnerInVM(HSQUIRRELVM vm, GameObject3D *obj, const std::string &classname, Vector3 origin, const std::unordered_map<std::string, std::string> &tags)
 {
   if (!vm)
     return;
 
+  SQInteger saved_top = sq_gettop(vm);
+
+  // 1. Get the function onto the stack
   sq_pushroottable(vm);
   sq_pushstring(vm, classname.c_str(), -1);
-
   if (SQ_FAILED(sq_get(vm, -2)))
   {
-    sq_pop(vm, 1);
+    sq_settop(vm, saved_top);
     return;
   }
+  // Remove root table, leaving only [Function] at the base
+  sq_remove(vm, -2);
 
-  sq_pushroottable(vm); // this
+  // 2. Push 'this' (the GameObject3D Userdata)
+  // This is the "environment". In Squirrel, this is the 1st param of sq_call.
+  PushGameObjectAsUserdata(vm, obj);
 
-  // arg 1: origin table {x, y, z}
+  // 3. Push Argument 1: origin table
   sq_newtable(vm);
   sq_pushstring(vm, "x", -1);
   sq_pushfloat(vm, origin.x);
@@ -1750,7 +1930,7 @@ static void sqCallEntitySpawnerInVM(HSQUIRRELVM vm, const std::string &classname
   sq_pushfloat(vm, origin.z);
   sq_newslot(vm, -3, SQFalse);
 
-  // arg 2: tags table
+  // 4. Push Argument 2: tags table
   sq_newtable(vm);
   for (auto &[key, val] : tags)
   {
@@ -1759,8 +1939,14 @@ static void sqCallEntitySpawnerInVM(HSQUIRRELVM vm, const std::string &classname
     sq_newslot(vm, -3, SQFalse);
   }
 
-  sq_call(vm, 3, SQFalse, SQTrue);
-  sq_pop(vm, 2);
+  // sq_call(vm, count, retval, raise_error)
+  // count = 3 (this + origin + tags)
+  if (SQ_FAILED(sq_call(vm, 3, SQFalse, SQTrue)))
+  {
+    // Handle error
+  }
+
+  sq_settop(vm, saved_top);
 };
 
 /*
@@ -1770,9 +1956,14 @@ then client VM (visuals).
 */
 void sqCallEntitySpawner(const std::string &classname, Vector3 origin, const std::unordered_map<std::string, std::string> &tags)
 {
-  sqCallEntitySpawnerInVM(server_vm, classname, origin, tags);
-  sqCallEntitySpawnerInVM(client_vm, classname, origin, tags);
-};
+  // Create the C++ object ONCE
+  GameObject3D *obj = InstanceCreate<GameObject3D>(origin);
+  obj->classname = classname;
+
+  // Pass the SAME object to both VMs
+  sqCallEntitySpawnerInVM(server_vm, obj, classname, origin, tags);
+  sqCallEntitySpawnerInVM(client_vm, obj, classname, origin, tags);
+}
 
 /*
 sqSpawnBSPEntities
@@ -2176,9 +2367,9 @@ static HSQUIRRELVM sqSetupVM(const char *side_name)
     // instances
     sq_register_func(v, sq_get_player_count, "get_player_count");
     sq_register_func(v, sq_instance_create, "instance_create");
-    sq_register_func(v, sq_instances_get, "instances_get_all");
+    sq_register_func(v, sq_instances_get_all, "instances_get_all");
     sq_register_func(v, sq_instances_get, "instances_get");
-    sq_register_func(v, sq_instances_get, "get_instance_count");
+    sq_register_func(v, sq_get_instance_count, "get_instance_count");
     sq_register_func(v, sq_get_player_instance, "get_player_instance");
   }
 
@@ -2288,11 +2479,6 @@ static HSQUIRRELVM sqSetupVM(const char *side_name)
 // Public Entry Points
 // -----------------------------------------------------------------------
 
-/*
-sqStartServer
-Call once when the server starts.
-Sets up the server VM, loads shared + server scripts, and calls init().
-*/
 void sqStartServer()
 {
   if (server_vm)
@@ -2303,12 +2489,6 @@ void sqStartServer()
   sqRunFunc(server_vm, "init");
 };
 
-/*
-sqStartClient
-Call once at program start.
-Sets up the client VM and loads shared + client scripts.
-init() is deferred until the server assigns an ID (see sqUpdate).
-*/
 void sqStartClient()
 {
   client_vm = sqSetupVM("CLIENT");
@@ -2329,12 +2509,10 @@ void sqUpdate(float dt)
 
   // Defer client init() until server has assigned our player ID
   static bool sq_client_init_done = false;
-  bool has_id = (my_local_player_id >= 0);
   if (!sq_client_init_done && global_client_init_called)
   {
     sqRunFunc(client_vm, "init");
     sq_client_init_done = true;
-
     sqSpawnBSPEntities();
   }
 

@@ -10,16 +10,17 @@
 #include <engine.h>
 #include <cstdint>
 #include <string>
-#include <sq.h>
+#include "raylib.h"
 #include "server_handlers.h"
 #include "net_utils.h"
 #include <format>
+#include <gameobject3d.h>
 
 ENetHost *server;
 ENetAddress address;
 ENetEvent event;
 MultiplayerUser users[MAX_PLAYERS];
-int users_count = 0;
+int client_count = 0;
 
 /*
 enetserver_init
@@ -27,6 +28,8 @@ Initializes the ENet server and starts listening on the specified port.
 */
 int enetserver_init()
 {
+  client_count = 0;
+
   // Initialize ENet
   if (enet_initialize() != 0)
   {
@@ -65,7 +68,7 @@ void enetserver_process_message(ENetEvent *event)
   auto GetPlayerID = [&]()
   {
     int sender_id = -1;
-    for (int i = 0; i < users_count; i++)
+    for (int i = 0; i < client_count; i++)
     {
       if (users[i].peer == event->peer)
       {
@@ -167,6 +170,67 @@ void enetserver_process_message(ENetEvent *event)
   }
 };
 
+// In server.cpp or your main server logic
+//
+// NOTE: the previous implementation used a `{uint8_t type; int id; Vector3 pos;}`
+// struct and `enet_host_broadcast`. Both were wrong:
+//   1. The compiler inserts 3 bytes of alignment padding between `type` and
+//      `id`, so the wire format was [type][pad*3][id][pos], but the client
+//      decoder in client.cpp expects [type][id][pos] flat — every broadcast
+//      position arrived with a corrupted id and a 3-byte-shifted Vector3.
+//   2. `enet_host_broadcast` sends to every peer INCLUDING the host's own
+//      client, which then overwrote the already-correct position on the host
+//      with the echoed (and pre-fix, corrupted) value.
+// Fix: pack a flat [int id][Vector3 pos] payload and route it through
+// SendToClient (which prepends the type byte) to every peer except the host's
+// own client. This matches the SetPosition / RequestJoin wire format so the
+// client decoder stays unchanged.
+static int last_client_count = 0;
+static void enetserver_sync_entities()
+{
+  if (!server_online)
+    return;
+
+  for (auto &obj : gameobjects)
+  {
+    if (last_client_count == client_count)
+    {
+      if (!obj->needs_sync)
+        continue;
+
+      if (client_count > 0)
+        obj->needs_sync = false;
+    }
+
+    last_client_count = client_count;
+    int id = obj->client_id;
+
+    struct
+    {
+      int id;
+      Vector3 pos;
+    } pPos = {id, obj->position};
+    struct
+    {
+      int id;
+      float angle;
+    } pAngle = {id, obj->angle};
+
+    for (int i = 0; i < client_count; i++)
+    {
+      if (!users[i].peer)
+        continue;
+      if (users[i].player_id == my_local_player_id)
+        continue; // don't echo back to the host's own client
+
+      SendToClient(users[i].peer, MESSAGE_TYPE_INTERNAL_POS_UPDATE,
+                   &pPos, sizeof(pPos));
+      SendToClient(users[i].peer, MESSAGE_TYPE_INTERNAL_ANGLE_UPDATE,
+                   &pAngle, sizeof(pAngle));
+    }
+  }
+}
+
 /*
 enetserver_update
 Polls for incoming messages from clients and handles them.
@@ -174,6 +238,8 @@ This function should be called in the main game loop to keep the server updated.
 */
 void enetserver_update()
 {
+  enetserver_sync_entities();
+
   while (enet_host_service(server, &event, 0) > 0)
   {
     switch (event.type)
@@ -226,7 +292,7 @@ void enetserver_stop()
     enet_host_destroy(server);
     server = NULL;
   }
-  users_count = 0;
+  client_count = 0;
   memset(users, 0, sizeof(users));
   server_online = false;
   printf("[SERVER]: Server stopped.\n");

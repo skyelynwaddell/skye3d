@@ -1,0 +1,555 @@
+[New Thread 20368.0x78bc]
+[New Thread 20368.0x2db0]
+[New Thread 20368.0x6aa4]
+INFO: TIMER: Target time per frame: 16.667 milliseconds
+INFO: Initializing raylib 4.6-dev
+INFO: Supported raylib modules:
+INFO:     > rcore:..... loaded (mandatory)
+INFO:     > rlgl:...... loaded (mandatory)
+INFO:     > rshapes:... loaded (optional)
+INFO:     > rtextures:. loaded (optional)
+INFO:     > rtext:..... loaded (optional)
+INFO:     > rmodels:... loaded (optional)
+INFO:     > raudio:.... loaded (optional)
+[New Thread 20368.0x2318]
+[New Thread 20368.0x41dc]
+[New Thread 20368.0x7e48]
+INFO: DISPLAY: Trying to enable MSAA x4
+[New Thread 20368.0x7118]
+[New Thread 20368.0x3f88]
+[New Thread 20368.0x8fc]
+[Thread 20368.0x7118 exited with code 0]
+[Thread 20368.0x3f88 exited with code 0]
+[Thread 20368.0x8fc exited with code 0]
+[New Thread 20368.0xcc0]
+[New Thread 20368.0x62b0]
+[New Thread 20368.0x1480]
+[New Thread 20368.0x6468]
+[New Thread 20368.0x6758]
+INFO: DISPLAY: Trying to enable VSYNC
+INFO: DISPLAY: Device initialized successfully
+INFO:     > Display size: 1920 x 1080
+INFO:     > Screen size:  1200 x 800
+INFO:     > Render size:  1200 x 800
+INFO:     > Viewport offsets: 0, 0
+INFO: GLAD: OpenGL extensions loaded successfully
+INFO: GL: Supported extensions count: 392
+INFO: GL: OpenGL device information:
+INFO:     > Vendor:   NVIDIA Corporation
+INFO:     > Renderer: NVIDIA GeForce GTX 1080/PCIe/SSE2
+INFO:     > Version:  4.3.0 NVIDIA 581.80
+INFO:     > GLSL:     4.30 NVIDIA via Cg compiler
+INFO: GL: VAO extension detected, VAO functions loaded successfully
+INFO: GL: NPOT textures extension detected, full NPOT textures supported
+INFO: GL: DXT compressed textures supported
+INFO: GL: ETC2/EAC compressed textures supported
+INFO: GL: Compute shaders supported
+INFO: GL: Shader storage buffer objects supported
+INFO: TEXTURE: [ID 1] Texture loaded successfully (1x1 | R8G8B8A8 | 1 mipmaps)
+INFO: TEXTURE: [ID 1] Default texture loaded successfully
+INFO: SHADER: [ID 1] Vertex shader compiled successfully
+INFO: SHADER: [ID 2] Fragment shader compiled successfully
+INFO: SHADER: [ID 3] Program shader loaded successfully
+INFO: SHADER: [ID 3] Default shader loaded successfully
+INFO: RLGL: Render batch vertex buffers loaded successfully in RAM (CPU)
+INFO: RLGL: Render batch vertex buffers loaded successfully in VRAM (GPU)
+INFO: RLGL: Default OpenGL state initialized successfully
+INFO: TEXTURE: [ID 2] Texture loaded successfully (128x128 | GRAY_ALPHA | 1 mipmaps)
+INFO: FONT: Default font loaded successfully (224 glyphs)
+INFO: TEXTURE: [ID 3] Texture loaded successfully (512x1024 | R8G8B8A8 | 1 mipmaps)
+DEBUG: Loading: C:\Users\skyes\Documents\skye3d\gamedata\scripts\server\sv_func_door.nut
+DEBUG: Loading: C:\Users\skyes\Documents\skye3d\gamedata\scripts\server\sv_entities.nut
+DEBUG: Loading: C:\Users\skyes\Documents\skye3d\gamedata\scripts\server\sv_network.nut
+DEBUG: Loading: C:\Users\skyes\Documents\skye3d\gamedata\scripts\server\sv_player.nut
+DEBUG: Loading: C:\Users\skyes\Documents\skye3d\gamedata\scripts\server\sv_init.nut
+DEBUG: Loading: C:\Users\skyes\Documents\skye3d\gamedata\scripts\server\sv_update.nut
+[SERVER]: 
+
+### SV INIT CALLED ###
+warning: onecore\net\netprofiles\service\src\nsp\dll\namespaceserviceprovider.cpp(616)\nlansp_c.dll!00007FF9863A65DA: (caller: 00007FF9F354205C) LogHr(1) tid(2474) 8007277C No such service is known. The service cannot be found in the specified name space.
+[SERVER]: Server Online! 0:1997
+[SERVER]: Object Position: x=10.5 y=20 z=-5.2
+[SERVER]: found torch at: 10.5, 20, -5.2
+
+[SERVER]: name: skye
+[SERVER]: health: 100
+[SERVER]: speed: 5.3
+[SERVER]: eliminated: false
+[SERVER]: From skye, my health: 100
+
+DEBUG: Loading: C:\Users\skyes\Documents\skye3d\gamedata\scripts\client\cs_globals.nut
+DEBUG: Loading: C:\Users\skyes\Documents\skye3d\gamedata\scripts\client\cs_network.nut
+DEBUG: Loading: C:\Users\skyes\Documents\skye3d\gamedata\scripts\client\cs_network_events.nut
+DEBUG: Loading: C:\Users\skyes\Documents\skye3d\gamedata\scripts\client\cs_player.nut
+DEBUG: Loading: C:\Users\skyes\Documents\skye3d\gamedata\scripts\client\cs_init.nut
+DEBUG: Loading: C:\Users\skyes\Documents\skye3d\gamedata\scripts\client\cs_update.nut
+DEBUG: Loading: C:\Users\skyes\Documents\skye3d\gamedata\scripts\client\cs_draw.nut
+DEBUG: Loading: C:\Users\skyes\Documents\skye3d\gamedata\scripts\client\cs_draw_gui.nut
+INFO: TEXTURE: [ID 4] Texture loaded successfully (256x128 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 4] Mipmaps generated automatically, total: 9
+INFO: TEXTURE: [ID 5] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 5] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 6] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 6] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 7] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 7] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 8] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 8] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 9] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 9] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 10] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 10] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 11] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 11] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 12] Texture loaded successfully (16x16 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 12] Mipmaps generated automatically, total: 5
+INFO: TEXTURE: [ID 13] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 13] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 14] Texture loaded successfully (16x16 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 14] Mipmaps generated automatically, total: 5
+INFO: TEXTURE: [ID 15] Texture loaded successfully (16x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 15] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 16] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 16] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 17] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 17] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 18] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 18] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 19] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 19] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 20] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 20] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 21] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 21] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 22] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 22] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 23] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 23] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 24] Texture loaded successfully (256x192 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 24] Mipmaps generated automatically, total: 9
+INFO: TEXTURE: [ID 25] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 25] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 26] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 26] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 27] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 27] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 28] Texture loaded successfully (64x128 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 28] Mipmaps generated automatically, total: 8
+INFO: TEXTURE: [ID 29] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 29] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 30] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 30] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 31] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 31] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 32] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 32] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 33] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 33] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 34] Texture loaded successfully (48x48 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 34] Mipmaps generated automatically, total: 6
+INFO: TEXTURE: [ID 35] Texture loaded successfully (32x32 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 35] Mipmaps generated automatically, total: 6
+INFO: TEXTURE: [ID 36] Texture loaded successfully (240x192 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 36] Mipmaps generated automatically, total: 8
+INFO: TEXTURE: [ID 37] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 37] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 38] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 38] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 39] Texture loaded successfully (16x16 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 39] Mipmaps generated automatically, total: 5
+INFO: TEXTURE: [ID 40] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 40] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 41] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 41] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 42] Texture loaded successfully (16x16 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 42] Mipmaps generated automatically, total: 5
+INFO: TEXTURE: [ID 43] Texture loaded successfully (48x48 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 43] Mipmaps generated automatically, total: 6
+INFO: TEXTURE: [ID 44] Texture loaded successfully (128x192 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 44] Mipmaps generated automatically, total: 8
+INFO: TEXTURE: [ID 45] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 45] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 46] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 46] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 47] Texture loaded successfully (64x64 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 47] Mipmaps generated automatically, total: 7
+INFO: TEXTURE: [ID 48] Texture loaded successfully (128x192 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 48] Mipmaps generated automatically, total: 8
+INFO: TEXTURE: [ID 49] Texture loaded successfully (48x48 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 49] Mipmaps generated automatically, total: 6
+INFO: TEXTURE: [ID 50] Texture loaded successfully (32x32 | R8G8B8 | 1 mipmaps)
+INFO: TEXTURE: [ID 50] Mipmaps generated automatically, total: 6
+INFO: FILEIO: [C:/Users/skyes/Documents/skye3d/gamedata/shaders/330/lighting.vert] Text file loaded successfully
+INFO: FILEIO: [C:/Users/skyes/Documents/skye3d/gamedata/shaders/330/lighting.frag] Text file loaded successfully
+INFO: SHADER: [ID 4] Vertex shader compiled successfully
+INFO: SHADER: [ID 5] Fragment shader compiled successfully
+INFO: SHADER: [ID 6] Program shader loaded successfully
+WARNING: FILEIO: [gamedata/shaders/330/invisible.vs] Failed to open text file
+INFO: FILEIO: [gamedata/shaders/330/invisible.fs] Text file loaded successfully
+INFO: SHADER: [ID 4] Fragment shader compiled successfully
+INFO: SHADER: [ID 5] Program shader loaded successfully
+INFO: FILEIO: [gamedata/shaders/330/water.vs] Text file loaded successfully
+INFO: FILEIO: [gamedata/shaders/330/water.fs] Text file loaded successfully
+INFO: SHADER: [ID 4] Vertex shader compiled successfully
+INFO: SHADER: [ID 7] Fragment shader compiled successfully
+INFO: SHADER: [ID 8] Program shader loaded successfully
+INFO: FILEIO: [gamedata/shaders/330/debug.vs] Text file loaded successfully
+INFO: FILEIO: [gamedata/shaders/330/debug.fs] Text file loaded successfully
+INFO: SHADER: [ID 4] Vertex shader compiled successfully
+INFO: SHADER: [ID 7] Fragment shader compiled successfully
+INFO: SHADER: [ID 9] Program shader loaded successfully
+INFO: FILEIO: [gamedata/shaders/330/sky.vs] Text file loaded successfully
+INFO: FILEIO: [gamedata/shaders/330/sky.fs] Text file loaded successfully
+INFO: SHADER: [ID 4] Vertex shader compiled successfully
+INFO: SHADER: [ID 7] Fragment shader compiled successfully
+INFO: SHADER: [ID 10] Program shader loaded successfully
+INFO: VAO: [ID 2] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 3] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 4] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 5] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 6] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 7] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 8] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 9] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 10] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 11] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 12] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 13] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 14] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 15] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 16] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 17] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 18] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 19] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 20] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 21] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 22] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 23] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 24] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 25] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 26] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 27] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 28] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 29] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 30] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 31] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 32] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 33] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 34] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 35] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 36] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 37] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 38] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 39] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 40] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 41] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 42] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 43] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 44] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 45] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 46] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 47] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 48] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 49] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 50] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 51] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 52] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 53] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 54] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 55] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 56] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 57] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 58] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 59] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 60] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 61] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 62] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 63] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 64] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 65] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 66] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 67] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 68] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 69] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 70] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 71] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 72] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 73] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 74] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 75] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 76] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 77] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 78] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 79] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 80] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 81] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 82] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 83] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 84] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 85] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 86] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 87] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 88] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 89] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 90] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 91] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 92] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 93] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 94] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 95] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 96] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 97] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 98] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 99] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 100] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 101] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 102] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 103] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 104] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 105] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 106] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 107] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 108] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 109] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 110] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 111] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 112] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 113] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 114] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 115] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 116] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 117] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 118] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 119] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 120] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 121] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 122] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 123] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 124] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 125] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 126] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 127] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 128] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 129] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 130] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 131] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 132] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 133] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 134] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 135] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 136] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 137] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 138] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 139] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 140] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 141] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 142] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 143] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 144] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 145] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 146] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 147] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 148] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 149] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 150] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 151] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 152] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 153] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 154] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 155] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 156] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 157] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 158] Mesh uploaded successfully to VRAM (GPU)
+INFO: VAO: [ID 159] Mesh uploaded successfully to VRAM (GPU)
+INFO: FILEIO: [C:/Users/skyes/Documents/skye3d/gamedata/shaders/330/lighting.vert] Text file loaded successfully
+INFO: FILEIO: [C:/Users/skyes/Documents/skye3d/gamedata/shaders/330/lighting.frag] Text file loaded successfully
+INFO: SHADER: [ID 4] Vertex shader compiled successfully
+INFO: SHADER: [ID 7] Fragment shader compiled successfully
+INFO: SHADER: [ID 11] Program shader loaded successfully
+INFO: FILEIO: [C:/Users/skyes/Documents/skye3d/gamedata/shaders/330/postprocess.vert] Text file loaded successfully
+INFO: FILEIO: [C:/Users/skyes/Documents/skye3d/gamedata/shaders/330/bloom_extract.frag] Text file loaded successfully
+INFO: SHADER: [ID 4] Vertex shader compiled successfully
+INFO: SHADER: [ID 7] Fragment shader compiled successfully
+INFO: SHADER: [ID 12] Program shader loaded successfully
+INFO: FILEIO: [C:/Users/skyes/Documents/skye3d/gamedata/shaders/330/postprocess.vert] Text file loaded successfully
+INFO: FILEIO: [C:/Users/skyes/Documents/skye3d/gamedata/shaders/330/blur.frag] Text file loaded successfully
+INFO: SHADER: [ID 4] Vertex shader compiled successfully
+INFO: SHADER: [ID 7] Fragment shader compiled successfully
+INFO: SHADER: [ID 13] Program shader loaded successfully
+INFO: FILEIO: [C:/Users/skyes/Documents/skye3d/gamedata/shaders/330/postprocess.vert] Text file loaded successfully
+INFO: FILEIO: [C:/Users/skyes/Documents/skye3d/gamedata/shaders/330/composite.frag] Text file loaded successfully
+INFO: SHADER: [ID 4] Vertex shader compiled successfully
+INFO: SHADER: [ID 7] Fragment shader compiled successfully
+INFO: SHADER: [ID 14] Program shader loaded successfully
+INFO: TEXTURE: [ID 51] Texture loaded successfully (1280x720 | R8G8B8A8 | 1 mipmaps)
+INFO: TEXTURE: [ID 1] Depth renderbuffer loaded successfully (32 bits)
+INFO: FBO: [ID 1] Framebuffer object created successfully
+INFO: TEXTURE: [ID 52] Texture loaded successfully (640x360 | R8G8B8A8 | 1 mipmaps)
+INFO: TEXTURE: [ID 2] Depth renderbuffer loaded successfully (32 bits)
+INFO: FBO: [ID 2] Framebuffer object created successfully
+INFO: TEXTURE: [ID 53] Texture loaded successfully (640x360 | R8G8B8A8 | 1 mipmaps)
+INFO: TEXTURE: [ID 3] Depth renderbuffer loaded successfully (32 bits)
+INFO: FBO: [ID 3] Framebuffer object created successfully
+[CLIENT]: attempting to join...
+warning: onecore\net\netprofiles\service\src\nsp\dll\namespaceserviceprovider.cpp(616)\nlansp_c.dll!00007FF9863A65DA: (caller: 00007FF9F354205C) LogHr(2) tid(2474) 8007277C No such service is known. The service cannot be found in the specified name space.
+[CLIENT]: Connected to server 127.0.0.1:1997
+[CLIENT]: ENet client initialized successfully.
+INFO: FBO: [ID 1] Unloaded framebuffer from VRAM (GPU)
+INFO: FBO: [ID 2] Unloaded framebuffer from VRAM (GPU)
+INFO: FBO: [ID 3] Unloaded framebuffer from VRAM (GPU)
+INFO: TEXTURE: [ID 51] Texture loaded successfully (1280x720 | R8G8B8A8 | 1 mipmaps)
+INFO: TEXTURE: [ID 1] Depth renderbuffer loaded successfully (32 bits)
+INFO: FBO: [ID 1] Framebuffer object created successfully
+INFO: TEXTURE: [ID 52] Texture loaded successfully (640x360 | R8G8B8A8 | 1 mipmaps)
+INFO: TEXTURE: [ID 2] Depth renderbuffer loaded successfully (32 bits)
+INFO: FBO: [ID 2] Framebuffer object created successfully
+INFO: TEXTURE: [ID 53] Texture loaded successfully (640x360 | R8G8B8A8 | 1 mipmaps)
+INFO: TEXTURE: [ID 3] Depth renderbuffer loaded successfully (32 bits)
+INFO: FBO: [ID 3] Framebuffer object created successfully
+[Thread 20368.0x6758 exited with code 0]
+[SERVER]: A new client connected from 100007f:63161. ID: 0
+[SERVER]: Handling float packet 'request_join' from player 0
+[CLIENT]: 
+
+ ### CS INIT CALLED ###
+[CLIENT]: calling cs_get_player_count
+[SERVER]: INFO_PLAYER_SPAWN : spawned at 83.2 14.8 74.8
+[CLIENT]: INFO_PLAYER_SPAWN : spawned at 83.2 14.8 74.8
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: func_door spawned at: 0, 0, 0
+[SERVER]: total players: 1
+[CLIENT]: total player count: 1
+[Thread 20368.0x62b0 exited with code 0]
+[Thread 20368.0x6aa4 exited with code 0]
+[Thread 20368.0x78bc exited with code 0]
+[Thread 20368.0x2db0 exited with code 0]
+[CLIENT]: shoot
+Server Set Flags for Player 0: 1
+Server Set Flags for Player 0: 0
+INFO: SHADER: [ID 11] Unloaded shader program data from VRAM (GPU)
+INFO: SHADER: [ID 12] Unloaded shader program data from VRAM (GPU)
+INFO: SHADER: [ID 13] Unloaded shader program data from VRAM (GPU)
+INFO: SHADER: [ID 14] Unloaded shader program data from VRAM (GPU)
+INFO: FBO: [ID 1] Unloaded framebuffer from VRAM (GPU)
+INFO: FBO: [ID 2] Unloaded framebuffer from VRAM (GPU)
+INFO: FBO: [ID 3] Unloaded framebuffer from VRAM (GPU)
+INFO: TEXTURE: [ID 50] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 49] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 48] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 46] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 45] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 44] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 42] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 41] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 38] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 36] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 47] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 35] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 33] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 16] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 8] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 37] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 29] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 12] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 15] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 20] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 28] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 9] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 40] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 13] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 24] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 7] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 43] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 5] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 19] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 39] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 18] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 4] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 22] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 6] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 17] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 32] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 11] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 10] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 14] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 23] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 31] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 25] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 34] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 21] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 27] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 26] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 30] Unloaded texture data from VRAM (GPU)
+INFO: VAO: [ID 2] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 3] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 4] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 5] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 6] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 7] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 8] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 9] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 10] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 11] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 12] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 13] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 14] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 15] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 16] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 17] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 18] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 19] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 20] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 21] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 22] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 23] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 24] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 25] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 26] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 27] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 28] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 29] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 30] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 31] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 32] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 33] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 34] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 35] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 36] Unloaded vertex array data from VRAM (GPU)
+INFO: VAO: [ID 37] Unloaded vertex array data from VRAM (GPU)
+INFO: TEXTURE: [ID 3] Unloaded texture data from VRAM (GPU)
+INFO: TEXTURE: [ID 2] Unloaded texture data from VRAM (GPU)
+INFO: SHADER: [ID 3] Default shader unloaded successfully
+INFO: TEXTURE: [ID 1] Default texture unloaded successfully
+INFO: Window closed successfully
+[Thread 20368.0x2318 exited with code 0]
+[Thread 20368.0x1480 exited with code 0]
+[Thread 20368.0x7e48 exited with code 0]
+[Thread 20368.0x41dc exited with code 0]
+[Thread 20368.0xcc0 exited with code 0]
+[Thread 20368.0x6468 exited with code 0]
+[Inferior 1 (process 20368) exited normally]
+No stack.

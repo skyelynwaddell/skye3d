@@ -50,33 +50,68 @@ void SpawnPlayer(int id)
 
 /*
 ConnectUser
-Called when a client connects to server
+Called when a client connects to server.
+
+Assigns the lowest free slot, NOT `client_count++`. Combined with the
+null-the-slot behaviour in DisconnectUser, this keeps player IDs stable
+across the life of the session — a player who got id=2 keeps id=2 until
+they disconnect, and no remap ever silently reassigns someone else's id.
+`client_count` is kept as a high-water mark for the iterating loops in
+SetPosition / enetserver_sync_entities / send_packet_number broadcasts;
+those loops all skip slots where `users[i].peer == nullptr`.
 */
 void ConnectUser(ENetPeer *peer)
 {
   printf("[SERVER]: A new client connected from %x:%u. ",
-         event.peer->address.host,
-         event.peer->address.port);
+         peer->address.host,
+         peer->address.port);
 
-  // add user
-  if (users_count < MAX_PLAYERS)
+  int id = -1;
+  for (int i = 0; i < MAX_PLAYERS; i++)
   {
-    int id = users_count++;
-    users[id].player_id = id;
-    users[id].peer = event.peer;
-    event.peer->data = &users[id];
-    peer->data = &users[id];
-    SendToClient(peer, MESSAGE_TYPE_ASSIGN_ID, &id, sizeof(int));
-    printf("ID: %d\n", id);
+    if (users[i].peer == nullptr)
+    {
+      id = i;
+      break;
+    }
   }
+  if (id < 0)
+  {
+    printf("[SERVER]: Server full, rejecting connection.\n");
+    enet_peer_disconnect(peer, 0);
+    return;
+  }
+
+  users[id].player_id = id;
+  users[id].peer = peer;
+  users[id].object_ref = nullptr;
+  users[id].username[0] = '\0';
+  peer->data = &users[id];
+  if (id >= client_count)
+    client_count = id + 1;
+
+  SendToClient(peer, MESSAGE_TYPE_ASSIGN_ID, &id, sizeof(int));
+  printf("ID: %d\n", id);
 };
 
 /*
 RequestJoin
-Spawns the joining player and syncs world state to them
+Spawns the joining player and syncs world state to them, then ACKs the
+join back to the requester's Lua layer.
+
+The ACK is critical. cs_network.lua's `join_game()` registers
+`pending_callbacks["request_join"] = function(packet) player_id = packet.value end`
+via `send_request`. The C++ server short-circuits the "request_join"
+packet (see server_handlers.h float_handlers) and does NOT forward it to
+sv_network.lua's handler, so without an explicit ACK here the Lua
+`player_id` variable on a client never converges to the real assigned id
+and every cs-side call that uses it as a client_id operates on stale data.
 */
 void RequestJoin(int sender_id)
 {
+  if (sender_id < 0 || sender_id >= MAX_PLAYERS)
+    return;
+
   if (users[sender_id].object_ref == nullptr)
     SpawnPlayer(sender_id);
 
@@ -95,6 +130,10 @@ void RequestJoin(int sender_id)
 
     if (users[i].object_ref)
     {
+      // Flat [int id][Vector3 pos] layout — matches client decoder in
+      // client.cpp for MESSAGE_TYPE_INTERNAL_POS_UPDATE. `int` is 4-byte
+      // aligned and Vector3 is also 4-byte aligned, so this struct has
+      // no internal padding.
       struct
       {
         int id;
@@ -103,6 +142,13 @@ void RequestJoin(int sender_id)
       SendToClient(users[sender_id].peer, MESSAGE_TYPE_INTERNAL_POS_UPDATE, &pData, sizeof(pData));
     }
   }
+
+  // ACK the requester with their id so cs_network.lua's pending callback
+  // fires and assigns `player_id = sender_id`.
+  if (sender_id == my_local_player_id)
+    Net_ToSQClient(sender_id, "request_join", (float)sender_id);
+  else if (users[sender_id].peer)
+    Net_ToCPPClient(users[sender_id].peer, "request_join", (float)sender_id);
 };
 
 /*
@@ -114,22 +160,50 @@ void SetPosition(Vector3 new_pos, int sender_id)
   if (users[sender_id].object_ref)
     users[sender_id].object_ref->position = new_pos;
 
-  char buffer[sizeof(int) + sizeof(Vector3)];
-  memcpy(buffer, &sender_id, sizeof(int));
-  memcpy(buffer + sizeof(int), &new_pos, sizeof(Vector3));
+  struct
+  {
+    int id;
+    Vector3 pos;
+  } pData = {sender_id, new_pos};
 
-  for (int i = 0; i < users_count; i++)
+  for (int i = 0; i < client_count; i++)
     if (users[i].peer && users[i].player_id != sender_id)
-      SendToClient(users[i].peer, MESSAGE_TYPE_INTERNAL_POS_UPDATE, buffer, sizeof(buffer));
+      SendToClient(users[i].peer, MESSAGE_TYPE_INTERNAL_POS_UPDATE, &pData, sizeof(pData));
+};
+
+void SetAngle(float new_angle, int sender_id)
+{
+  if (users[sender_id].object_ref)
+    users[sender_id].object_ref->angle = new_angle;
+
+  struct
+  {
+    int id;
+    float angle;
+  } pData = {sender_id, new_angle};
+
+  for (int i = 0; i < client_count; i++)
+    if (users[i].peer && users[i].player_id != sender_id)
+      SendToClient(users[i].peer, MESSAGE_TYPE_INTERNAL_ANGLE_UPDATE, &pData, sizeof(pData));
 };
 
 /*
 DisconnectUser
-Removes a user from the list and destroys their game object
+Removes a user from the list and destroys their game object.
+
+IMPORTANT: we do NOT compact the `users[]` array. Compacting silently
+changes the stable ID → slot mapping, which breaks every lookup in the
+codebase that does `users[sender_id].object_ref` (SetPosition, the
+packet broadcasters in lua.cpp, etc.) and leaves `GameObject3D::client_id`
+fields pointing at the wrong users[] entry. Instead we just null the
+slot so the id can be reclaimed by the next ConnectUser.
 */
 void DisconnectUser(ENetPeer *peer)
 {
-  for (int i = 0; i < users_count; i++)
+  if (!peer)
+    return;
+
+  for (int i = 0; i < client_count; i++)
   {
     if (users[i].peer != peer)
       continue;
@@ -140,11 +214,11 @@ void DisconnectUser(ENetPeer *peer)
       if (obj->client_id == users[i].player_id)
         obj->Destroy();
 
-    for (int j = i; j < users_count - 1; j++)
-      users[j] = users[j + 1];
-
-    users_count--;
+    users[i].peer = nullptr;
+    users[i].object_ref = nullptr;
+    users[i].username[0] = '\0';
+    users[i].player_id = -1;
     break;
   }
-  peer->data = NULL;
+  peer->data = nullptr;
 };

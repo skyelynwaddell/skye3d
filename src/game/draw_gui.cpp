@@ -1,13 +1,13 @@
 #include "engine.h"
 #include <camera3d.h>
-#include <sq.h>
 #include <gameobject3d.h>
 #include <bsp.h>
+#include <lua.hpp>
 
 void DrawGUI()
 {
   global_draw_fps = false;
-  sqDrawGUI(GetFrameTime());
+  luaDrawGUI(GetFrameTime());
   GameObject3D_DrawAll();
 
   // if (enable_imgui)

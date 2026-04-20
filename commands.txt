@@ -1,0 +1,3 @@
+run
+generate-core-file crash.dmp
+quit

@@ -1,381 +1,299 @@
-# Scripting Docs
+Here’s your documentation rewritten cleanly in **Lua-style Markdown (MD) format**, keeping everything consistent and idiomatic:
 
-### [SV] Server Side
+---
 
-```cpp
-// Networking
-void start_server(); // call at start of sv_init.nut
-int get_player_count(); // returns player count of the connected server
-void sendflags_sync(); // syncs the updated sendflags variable to server
+# Lua Scripting Docs
+
+## [SV] Server Side
+
+```lua
+-- Networking
+function start_server() end -- call at start of sv_init
+function get_player_count() return 0 end -- returns player count
+function sendflags_sync() end -- syncs sendflags to server
 ```
 
-```cpp
-// instance creation & sub funcs
-local obj = instance_create(float x, float y, float z); // spawns a GameObject3D
-local objs = instances_get_all(); // returns an array of ALL gameobject references
-local objs = instances_get(string target_name); // returns an array of references to gameobjects with the same target_name (use "player" to return an array of all the players)
-local player = get_player_instance(int client_id); // returns reference of player object instance by client_id
-int get_instance_count(); // returns amount of spawned GameObject3D's in the world (including players)
+```lua
+-- Instance creation & management
+function instance_create(x, y, z) return {} end -- spawns GameObject3D
+function instances_get_all() return {} end -- returns all instances
+function instances_get(name) return {} end -- get by target_name
+function get_player_instance(client_id) return {} end
+function get_instance_count() return 0 end
 
-obj.destroy();  // destroys the GameObject3D
-obj.get(string variable_name); // gets a value of type [int, float, string, bool] by name
-obj.set(string variable_name, variant<int, float, string, bool> value); // sets a value of either [int, float, string, bool] by name
+-- Object methods
+obj = {}
 
-// transformation & physics
-obj.get_position(); // returns Vector3 table {x, y, z}
-obj.set_position(float x, float y, float z);
-obj.get_velocity(); // returns Vector3 table {x, y, z}
-obj.set_velocity(float x, float y, float z);
-obj.get_acceleration(); // returns Vector3 table {x, y, z}
-obj.set_acceleration(float x, float y, float z);
-obj.get_speed(); // returns float
-obj.set_speed(float speed);
-obj.get_size(); // returns Vector3 table {x, y, z}
-obj.set_size(float x, float y, float z);
-
-// collision [position + collision_box = collision_area]
-obj.get_collision_box(); // returns table {width,height,length}
-obj.set_collision_box(float width, float height, float length);
-
-// targeting & identification
-obj.get_target_name();  // gets their target_name string
-obj.set_target_name(string name);
-obj.get_target(); // gets their target string
-obj.set_target(string name);
-
-// Create a function for an instance & run it
-function helloworld()
-{
-    // 'this' refers to the caller of this function
-    print("name: " + this.get("name"));
-    print("health: " + this.get("health"));
-    print("mana: " + this.get("mana"));
-    print("eliminated: " + this.get("eliminated"));
-};
-obj = instance_create(0, 0, 0);
-obj.set("name", "skye");
-obj.set("health", 100);
-obj.set("mana", 3.4);
-obj.set("eliminated", false);
-obj.helloworld();
-
+function obj:destroy() end
+function obj:get(var) return nil end
+function obj:set(var, value) end
 ```
 
-### [SH] Shared
+```lua
+-- Transformation & physics
+function obj:get_position() return {x=0,y=0,z=0} end
+function obj:set_position(x,y,z) end
 
-```cpp
-// Variables
-string SIDE; // returns either CLIENT or SERVER side depending on if user is host
+function obj:get_velocity() return {x=0,y=0,z=0} end
+function obj:set_velocity(x,y,z) end
 
-// Networking
-void send_packet_number(int client_id, string event_name, float data); // sends a packet to Server or Client
-void send_packet_vector3(int client_id, string event_name, Vector3 data); // sends a packet to Server or Client
-Packet get_packet(); // returns a Packet object {client_id, name, data} when received from Server or Client
+function obj:get_acceleration() return {x=0,y=0,z=0} end
+function obj:set_acceleration(x,y,z) end
 
-// Timing
-void set_target_fps(int target_fps); // set the windows target fps (doesn't mean fps will be it)
-float get_frame_time(); // delta time
-float get_time(); // returns current time of pc
-float get_fps(); // returns current fps game is running at
+function obj:get_speed() return 0 end
+function obj:set_speed(speed) end
 
-// RNG
-void set_random_seed(int new_seed); // sets a new random seed of choice
-int get_random_value(int min, int max) // returns an inclusive range of min-max
-
+function obj:get_size() return {x=0,y=0,z=0} end
+function obj:set_size(x,y,z) end
 ```
 
-### [CL] Client Side
+```lua
+-- Collision
+function obj:get_collision_box()
+    return {width=0,height=0,length=0}
+end
 
-```cpp
-// Networking
-void connect_to_server(); // connects client to a server
-
-// Input Keys
-bool is_key_pressed(int key); // returns true the frame the key is pressed
-bool is_key_down(int key); // returns true if key is down
-bool is_key_released(int key); // returns true the frame they key is released
-bool is_key_up(int key); // returns true if the key is up
-float get_mouse_x(); // returns mouse_x
-float get_mouse_y(); // returns mouse_y
-float get_mouse_delta(); // returns mouse delta
-float get_mouse_wheel_move(); // returns mouse wheel move
-void set_mouse_cursor(int cursor_id); // set the mouse cursor by cursor id
-
-// Input Mouse
-bool is_mouse_button_pressed(int key); // returns true the frame the mb is pressed
-bool is_mouse_button_down(int key); // returns true if mb is down
-bool is_mouse_button_released(int key); // returns true the frame the key is released
-bool is_mouse_button_up(int key); // returns true if they mb is up
-
-// Gamepad
-bool is_gamepad_available(int index);
-string get_gamepad_name(int index);
-bool is_gamepad_button_pressed(int index, int button);
-bool is_gamepad_button_down(int index, int button);
-bool is_gamepad_button_released(int index, int button);
-bool is_gamepad_button_up(int index, int button);
-int get_gamepad_button_pressed(); // returns the enum value of the last pressed button
-int get_gamepad_axis_count(int index);
-float get_gamepad_axis_movement(int index, int axis); // returns -1.0 to 1.0
-void set_gamepad_vibration(int index, float left_motor, float right_motor, float duration);
-
-// Window
-void toggle_fullscreen(); // Toggles window fullscreen
-void toggle_borderless_windowed(); // Toggles window bordless windowed
-void maximize_window(); // Maximizes window
-void minimize_window(); // Minimizes window
-void restore_window(); // Restores window
-void set_window_icon(string filepath); // Set window icon by filepath
-void set_window_title(string title); // Set window title
-void set_window_position(float x, float y); // Set window position by xy
-float get_screen_width(); // returns window width
-float get_screen_height(); // returns window height
-float get_render_width(); // returns render width
-float get_render_height(); // returns render height
-
-// Cursor
-void show_cursor(); // shows cursor if hidden
-void hide_cursor(); // hides cursor if visible
-bool is_cursor_hidden(); // returns true if cursor is hidden
-void enable_cursor(); // enable cursor
-void disable_cursor(); // disable cursor
-bool is_cursor_on_screen(); // returns true if the mouse cursor is currently on screen
-
-// System
-Vector3 get_camera_position(); // Gets the 3d camera's x y z position
-
-// Drawing
-void clear_background(Color color); // clears background with a Color [ie. COLOR.GOLD]
-void begin_scissor_mode(int x, int y, int width, int height); // begin scissor mode
-void end_scissor_mode(); // end scissor mode
-
-// RText
-void load_font(string filename, int font_size); // load a font from file location
-void draw_text(string text, int x, int y, int font_size, Color color); // draw text on screen
-
-// RShapes
-void draw_rectangle(int x, int y, int width, int height, Color color); // draws a 2d rectangle
-
-// RModels
-void draw_cube(float x, float y, float z, float width, float height, float length);
-
+function obj:set_collision_box(w,h,l) end
 ```
 
-# Enums
+```lua
+-- Targeting & identification
+function obj:get_target_name() return "" end
+function obj:set_target_name(name) end
 
-### COLOR
-
-```c
-// [ie. COLOR.GOLD]
-// Colors
-enum COLOR {
-    LIGHTGRAY,
-    GRAY,
-    DARKGRAY,
-    YELLOW,
-    GOLD,
-    ORANGE,
-    PINK,
-    RED,
-    MAROON,
-    GREEN,
-    LIME,
-    DARKGREEN,
-    SKYBLUE,
-    BLUE,
-    DARKBLUE,
-    PURPLE,
-    VIOLET,
-    DARKPURPLE,
-    BEIGE,
-    BROWN,
-    DARKBROWN,
-    WHITE,
-    BLACK,
-    BLANK,
-    MAGENTA,
-    RAYWHITE,
-};
-
+function obj:get_target() return "" end
+function obj:set_target(name) end
 ```
 
-### PACKET
+```lua
+-- Example: Think function
+function player_think(self, dt)
+    print("name: " .. tostring(self:get("name")))
+    print("health: " .. tostring(self:get("health")))
+    print("mana: " .. tostring(self:get("mana")))
+    print("eliminated: " .. tostring(self:get("eliminated")))
+end
 
-```c
-// [ie. PACKET.NUMBER]
-// Packets
-enum PACKET {
+function info_player_start(self, origin, tags)
+    self:set_think(player_think)
+end
+```
+
+---
+
+## [SH] Shared
+
+```lua
+-- Variables
+SIDE = "CLIENT" -- or "SERVER"
+```
+
+```lua
+-- Networking
+function send_packet_number(client_id, event_name, data) end
+function send_packet_vector3(client_id, event_name, vec3) end
+function get_packet()
+    return {client_id=0, name="", data=nil}
+end
+```
+
+```lua
+-- Timing
+function set_target_fps(fps) end
+function get_frame_time() return 0 end
+function get_time() return os.time() end
+function get_fps() return 0 end
+```
+
+```lua
+-- RNG
+function set_random_seed(seed) math.randomseed(seed) end
+function get_random_value(min, max)
+    return math.random(min, max)
+end
+```
+
+---
+
+## [CL] Client Side
+
+```lua
+-- Networking
+function connect_to_server() end
+```
+
+```lua
+-- Input (Keyboard)
+function is_key_pressed(key) return false end
+function is_key_down(key) return false end
+function is_key_released(key) return false end
+function is_key_up(key) return true end
+
+function get_mouse_x() return 0 end
+function get_mouse_y() return 0 end
+function get_mouse_delta() return 0 end
+function get_mouse_wheel_move() return 0 end
+
+function set_mouse_cursor(cursor_id) end
+```
+
+```lua
+-- Mouse buttons
+function is_mouse_button_pressed(btn) return false end
+function is_mouse_button_down(btn) return false end
+function is_mouse_button_released(btn) return false end
+function is_mouse_button_up(btn) return true end
+```
+
+```lua
+-- Gamepad
+function is_gamepad_available(i) return false end
+function get_gamepad_name(i) return "" end
+
+function is_gamepad_button_pressed(i,b) return false end
+function is_gamepad_button_down(i,b) return false end
+function is_gamepad_button_released(i,b) return false end
+function is_gamepad_button_up(i,b) return true end
+
+function get_gamepad_button_pressed() return 0 end
+function get_gamepad_axis_count(i) return 0 end
+function get_gamepad_axis_movement(i,a) return 0 end
+
+function set_gamepad_vibration(i,l,r,d) end
+```
+
+```lua
+-- Window
+function toggle_fullscreen() end
+function toggle_borderless_windowed() end
+function maximize_window() end
+function minimize_window() end
+function restore_window() end
+
+function set_window_icon(path) end
+function set_window_title(title) end
+function set_window_position(x,y) end
+
+function get_screen_width() return 0 end
+function get_screen_height() return 0 end
+function get_render_width() return 0 end
+function get_render_height() return 0 end
+```
+
+```lua
+-- Cursor
+function show_cursor() end
+function hide_cursor() end
+function is_cursor_hidden() return false end
+
+function enable_cursor() end
+function disable_cursor() end
+function is_cursor_on_screen() return true end
+```
+
+```lua
+-- System
+function get_camera_position()
+    return {x=0,y=0,z=0}
+end
+```
+
+```lua
+-- Drawing
+function clear_background(color) end
+
+function begin_scissor_mode(x,y,w,h) end
+function end_scissor_mode() end
+```
+
+```lua
+-- Text
+function load_font(file, size) end
+function draw_text(text,x,y,size,color) end
+```
+
+```lua
+-- Shapes
+function draw_rectangle(x,y,w,h,color) end
+```
+
+```lua
+-- Models
+function draw_cube(x,y,z,w,h,l) end
+```
+
+---
+
+# Enums (Lua Style)
+
+## COLOR
+
+```lua
+COLOR = {
+    LIGHTGRAY=1, GRAY=2, DARKGRAY=3,
+    YELLOW=4, GOLD=5, ORANGE=6,
+    PINK=7, RED=8, MAROON=9,
+    GREEN=10, LIME=11, DARKGREEN=12,
+    SKYBLUE=13, BLUE=14, DARKBLUE=15,
+    PURPLE=16, VIOLET=17, DARKPURPLE=18,
+    BEIGE=19, BROWN=20, DARKBROWN=21,
+    WHITE=22, BLACK=23, BLANK=24,
+    MAGENTA=25, RAYWHITE=26
+}
+```
+
+## PACKET_TYPE
+
+```lua
+PACKET_TYPE = {
     NUMBER = 0,
     VECTOR3 = 1,
     STRING = 2,
-    BOOL = 3,
-};
+    BOOL = 3
+}
 ```
 
-### MOUSE_BUTTON
+## MOUSE_BUTTON
 
-```c
-// [ie. MOUSE_BUTTON.LEFT]
-// Mouse buttons
-enum MOUSE_BUTTON {
-    LEFT    = 0,       // Mouse button left
-    RIGHT   = 1,       // Mouse button right
-    MIDDLE  = 2,       // Mouse button middle (pressed wheel)
-    SIDE    = 3,       // Mouse button side (advanced mouse device)
-    EXTRA   = 4,       // Mouse button extra (advanced mouse device)
-    FORWARD = 5,       // Mouse button forward (advanced mouse device)
-    BACK    = 6,       // Mouse button back (advanced mouse device)
-};
-
+```lua
+MOUSE_BUTTON = {
+    LEFT=0, RIGHT=1, MIDDLE=2,
+    SIDE=3, EXTRA=4, FORWARD=5, BACK=6
+}
 ```
 
-### GAMEPAD_BUTTON
+## GAMEPAD_BUTTON
 
-```c
-// [ie. GAMEPAD_BUTTON.RIGHT_FACE_DOWN]
-enum GAMEPAD_BUTTON {
-    LEFT_FACE_UP, LEFT_FACE_RIGHT, LEFT_FACE_DOWN, LEFT_FACE_LEFT,      // dpad
-    RIGHT_FACE_UP, RIGHT_FACE_RIGHT, RIGHT_FACE_DOWN, RIGHT_FACE_LEFT,  // abxy
-    LEFT_TRIGGER_1, LEFT_TRIGGER_2, RIGHT_TRIGGER_1, RIGHT_TRIGGER_2,   // top triggers
-    MIDDLE_LEFT, MIDDLE, MIDDLE_RIGHT                                   // start, select, middle btn
-};
+```lua
+GAMEPAD_BUTTON = {
+    LEFT_FACE_UP=1, LEFT_FACE_RIGHT=2, LEFT_FACE_DOWN=3, LEFT_FACE_LEFT=4,
+    RIGHT_FACE_UP=5, RIGHT_FACE_RIGHT=6, RIGHT_FACE_DOWN=7, RIGHT_FACE_LEFT=8,
+    LEFT_TRIGGER_1=9, LEFT_TRIGGER_2=10,
+    RIGHT_TRIGGER_1=11, RIGHT_TRIGGER_2=12,
+    MIDDLE_LEFT=13, MIDDLE=14, MIDDLE_RIGHT=15
+}
 ```
 
-### GAMEPAD_AXIS
+## GAMEPAD_AXIS
 
-```c
-// [ie. GAMEPAD_AXIS.LEFT_X]
-enum GAMEPAD_AXIS {
-    LEFT_X,         // Left stick horizontal
-    LEFT_Y,         // Left stick vertical
-    RIGHT_X,        // Right stick horizontal
-    RIGHT_Y,        // Right stick vertical
-    LEFT_TRIGGER,   // Pressure sensitive L2
-    RIGHT_TRIGGER   // Pressure sensitive R2
-};
+```lua
+GAMEPAD_AXIS = {
+    LEFT_X=1, LEFT_Y=2,
+    RIGHT_X=3, RIGHT_Y=4,
+    LEFT_TRIGGER=5, RIGHT_TRIGGER=6
+}
 ```
 
-### KEY
+## KEY (partial example)
 
-```c
-// [ie. KEY.SPACE]
-// NOTE: Use GetKeyPressed() to allow redefining
-// required keys for alternative layouts
-enum KEY {
-    NULL            = 0,        // Key: NULL, used for no key pressed
-    // Alphanumeric keys
-    APOSTROPHE      = 39,       // Key: '
-    COMMA           = 44,       // Key: ,
-    MINUS           = 45,       // Key: -
-    PERIOD          = 46,       // Key: .
-    SLASH           = 47,       // Key: /
-    ZERO            = 48,       // Key: 0
-    ONE             = 49,       // Key: 1
-    TWO             = 50,       // Key: 2
-    THREE           = 51,       // Key: 3
-    FOUR            = 52,       // Key: 4
-    FIVE            = 53,       // Key: 5
-    SIX             = 54,       // Key: 6
-    SEVEN           = 55,       // Key: 7
-    EIGHT           = 56,       // Key: 8
-    NINE            = 57,       // Key: 9
-    SEMICOLON       = 59,       // Key: ;
-    EQUAL           = 61,       // Key: =
-    A               = 65,       // Key: A | a
-    B               = 66,       // Key: B | b
-    C               = 67,       // Key: C | c
-    D               = 68,       // Key: D | d
-    E               = 69,       // Key: E | e
-    F               = 70,       // Key: F | f
-    G               = 71,       // Key: G | g
-    H               = 72,       // Key: H | h
-    I               = 73,       // Key: I | i
-    J               = 74,       // Key: J | j
-    K               = 75,       // Key: K | k
-    L               = 76,       // Key: L | l
-    M               = 77,       // Key: M | m
-    N               = 78,       // Key: N | n
-    O               = 79,       // Key: O | o
-    P               = 80,       // Key: P | p
-    Q               = 81,       // Key: Q | q
-    R               = 82,       // Key: R | r
-    S               = 83,       // Key: S | s
-    T               = 84,       // Key: T | t
-    U               = 85,       // Key: U | u
-    V               = 86,       // Key: V | v
-    W               = 87,       // Key: W | w
-    X               = 88,       // Key: X | x
-    Y               = 89,       // Key: Y | y
-    Z               = 90,       // Key: Z | z
-    LEFT_BRACKET    = 91,       // Key: [
-    BACKSLASH       = 92,       // Key: '\'
-    RIGHT_BRACKET   = 93,       // Key: ]
-    GRAVE           = 96,       // Key: `
-    // Function keys
-    SPACE           = 32,       // Key: Space
-    ESCAPE          = 256,      // Key: Esc
-    ENTER           = 257,      // Key: Enter
-    TAB             = 258,      // Key: Tab
-    BACKSPACE       = 259,      // Key: Backspace
-    INSERT          = 260,      // Key: Ins
-    DELETE          = 261,      // Key: Del
-    RIGHT           = 262,      // Key: Cursor right
-    LEFT            = 263,      // Key: Cursor left
-    DOWN            = 264,      // Key: Cursor down
-    UP              = 265,      // Key: Cursor up
-    PAGE_UP         = 266,      // Key: Page up
-    PAGE_DOWN       = 267,      // Key: Page down
-    HOME            = 268,      // Key: Home
-    END             = 269,      // Key: End
-    CAPS_LOCK       = 280,      // Key: Caps lock
-    SCROLL_LOCK     = 281,      // Key: Scroll down
-    NUM_LOCK        = 282,      // Key: Num lock
-    PRINT_SCREEN    = 283,      // Key: Print screen
-    PAUSE           = 284,      // Key: Pause
-    F1              = 290,      // Key: F1
-    F2              = 291,      // Key: F2
-    F3              = 292,      // Key: F3
-    F4              = 293,      // Key: F4
-    F5              = 294,      // Key: F5
-    F6              = 295,      // Key: F6
-    F7              = 296,      // Key: F7
-    F8              = 297,      // Key: F8
-    F9              = 298,      // Key: F9
-    F10             = 299,      // Key: F10
-    F11             = 300,      // Key: F11
-    F12             = 301,      // Key: F12
-    LEFT_SHIFT      = 340,      // Key: Shift left
-    LEFT_CONTROL    = 341,      // Key: Control left
-    LEFT_ALT        = 342,      // Key: Alt left
-    LEFT_SUPER      = 343,      // Key: Super left
-    RIGHT_SHIFT     = 344,      // Key: Shift right
-    RIGHT_CONTROL   = 345,      // Key: Control right
-    RIGHT_ALT       = 346,      // Key: Alt right
-    RIGHT_SUPER     = 347,      // Key: Super right
-    KB_MENU         = 348,      // Key: KB menu
-    // Keypad keys
-    KP_0            = 320,      // Key: Keypad 0
-    KP_1            = 321,      // Key: Keypad 1
-    KP_2            = 322,      // Key: Keypad 2
-    KP_3            = 323,      // Key: Keypad 3
-    KP_4            = 324,      // Key: Keypad 4
-    KP_5            = 325,      // Key: Keypad 5
-    KP_6            = 326,      // Key: Keypad 6
-    KP_7            = 327,      // Key: Keypad 7
-    KP_8            = 328,      // Key: Keypad 8
-    KP_9            = 329,      // Key: Keypad 9
-    KP_DECIMAL      = 330,      // Key: Keypad .
-    KP_DIVIDE       = 331,      // Key: Keypad /
-    KP_MULTIPLY     = 332,      // Key: Keypad *
-    _KP_SUBTRACT     = 333,      // Key: Keypad -
-    KP_ADD          = 334,      // Key: Keypad +
-    KP_ENTER        = 335,      // Key: Keypad Enter
-    KP_EQUAL        = 336,      // Key: Keypad =
-    // Android key buttons
-    BACK            = 4,        // Key: Android back button
-    _MENU            = 82,       // Key: Android menu button
-    VOLUME_UP       = 24,       // Key: Android volume up button
-    VOLUME_DOWN     = 25        // Key: Android volume down button
-};
+```lua
+KEY = {
+    SPACE = 32,
+    ENTER = 257,
+    ESCAPE = 256,
 
+    A = 65, B = 66, C = 67,
+    D = 68, E = 69, F = 70,
+    -- continue as needed...
+}
 ```

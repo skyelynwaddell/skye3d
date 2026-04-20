@@ -2,7 +2,6 @@
 #include "enet.h"
 #include <cstdint>
 #include "global.h"
-#include "sq.h"
 #include <net_utils.h>
 #include <gameobject3d.h>
 #include <player.h>
@@ -21,6 +20,7 @@ Returns true (1) on success, false (0) on failure.
 */
 int enetclient_init(void)
 {
+  client_count = 0;
   memset(users, 0, sizeof(users));
 
   if (enet_initialize() != 0)
@@ -291,14 +291,49 @@ void enetclient_update()
         if (id == my_local_player_id)
           continue;
 
+        bool found = false;
         for (auto &obj : gameobjects)
         {
           if (obj->client_id == id)
           {
             obj->position = pos;
+            found = true;
             break;
           }
         }
+
+        if (!found)
+        {
+          // probably an instance the server spawned
+          auto newobj = InstanceCreate<GameObject3D>(pos);
+          newobj->client_id = id;
+        }
+
+        continue;
+      }
+      else if (type == MESSAGE_TYPE_INTERNAL_ANGLE_UPDATE)
+      {
+        int id;
+        float angle;
+
+        memcpy(&id, payload, sizeof(int));
+        memcpy(&angle, payload + sizeof(int), sizeof(float));
+        enet_packet_destroy(event.packet);
+
+        if (id == my_local_player_id)
+          continue;
+
+        bool found = false;
+        for (auto &obj : gameobjects)
+        {
+          if (obj->client_id == id)
+          {
+            obj->angle = angle;
+            found = true;
+            break;
+          }
+        }
+
         continue;
       }
       else if (type == MESSAGE_TYPE_ASSIGN_ID)

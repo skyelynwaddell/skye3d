@@ -21,6 +21,9 @@ inline bool global_draw_fps = false;
 inline float global_fps_x = 0.0f;
 inline float global_fps_y = 0.0f;
 
+inline int brush_sync_id = 100000;
+inline int spawned_instance_id = 200000;
+
 // RL_TEXTURE_FILTER_POINT = 0,        // No filter, just pixel approximation
 // RL_TEXTURE_FILTER_BILINEAR = 1,         // Linear filtering
 // RL_TEXTURE_FILTER_TRILINEAR = 2,        // Trilinear filtering (linear with mipmaps)
