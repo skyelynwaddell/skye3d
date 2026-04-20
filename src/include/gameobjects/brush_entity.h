@@ -21,11 +21,9 @@ Basic usage — just renders the brush at its origin and provides tag access:
 class BrushEntity : public GameObject3D
 {
 public:
-  std::unordered_map<std::string, std::string> tags;
   Model brush_model = {};
   bool has_model = false;
   int clipnode_root = -1;
-  Vector3 spawn_origin = {0, 0, 0};
 
   Model cube;
 
@@ -63,7 +61,8 @@ public:
 
   void Draw() override
   {
-    if (has_model && !classname.starts_with("trigger"))
+    // !classname.starts_with("trigger")
+    if (has_model)
     {
       Vector3 offset = Vector3Subtract(position, spawn_origin);
 

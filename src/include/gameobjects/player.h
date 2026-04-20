@@ -125,6 +125,7 @@ updates camera position, yaw, and pitch
     if (!IsMenuMode)
       HandleRotation(dt);
 
+    angle = -global_cam_yaw * RAD2DEG;
     Vector3 forward = {sinf(global_cam_yaw), 0.f, -cosf(global_cam_yaw)};
     Vector3 right = {cosf(global_cam_yaw), 0.f, sinf(global_cam_yaw)};
 
@@ -136,6 +137,9 @@ updates camera position, yaw, and pitch
     {
       vertical_stack.clear();
       horizontal_stack.clear();
+      velocity = {0, 0, 0};
+      fmove = 0.0f;
+      smove = 0.0f;
     }
 
     position = bsp_collider.MoveAndSlide(position, velocity, forward, right, fmove, smove);
@@ -182,13 +186,19 @@ updates camera position, yaw, and pitch
         {i_am_client,
          "SyncPosition",
          [&]()
-         { Net_ToCPPClient(peer, "set_position", position); }},
+         {
+           Net_ToCPPClient(peer, "set_position", position);
+           Net_ToCPPClient(peer, "set_angle", angle);
+         }},
 
         // BroadcastPosition
         {i_am_host,
          "BroadcastPosition",
          [&]()
-         { SetPosition(position, my_local_player_id); }},
+         {
+           SetPosition(position, my_local_player_id);
+           SetAngle(angle, my_local_player_id);
+         }},
 
         // Add new sync tasks here:
         // { some_condition, "MyNewSync", [&]() { ... } },
@@ -213,6 +223,7 @@ updates camera position, yaw, and pitch
       PlayerMovement();
       SyncClientServer();
     }
+    GameObject3D::Update();
   };
 
   /*

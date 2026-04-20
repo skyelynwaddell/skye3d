@@ -18,14 +18,6 @@ void SendToClient(ENetPeer *peer, uint8_t type, const void *data, size_t data_le
 /*
 UpdateInputMode
 */
-inline bool IsMenuMode = false;
-inline void UpdateInputMode()
-{
-  if (!IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))
-    return;
-  IsMenuMode = !IsMenuMode;
-  IsMenuMode ? EnableCursor() : DisableCursor();
-};
 
 // GameObject3D
 using ScriptValue = std::variant<std::string, float, bool, int>; // value a .nut script variable can be
@@ -42,6 +34,8 @@ public:
   std::string target = "";
   Vector3 velocity = {0.0f, 0.0f, 0.0f};
   Vector3 position = {0.0f, 0.0f, 0.0f};
+  Vector3 spawn_origin = {0, 0, 0};
+  std::unordered_map<std::string, std::string> tags;
   Vector3 last_position = {0.0f, 0.0f, 0.0f};
   Vector3 collision_offset = {0.0f, 0.0f, 0.0f};
   Vector3 collision_box = {0.5f, 0.6f, 0.5f};
@@ -49,6 +43,9 @@ public:
   float speed = 200.0f;
   float acceleration = 20.0f;
   int sendflags = 0;
+  int spawnflags = 0;
+  float angle = 0;
+
   std::unordered_map<std::string, ScriptValue> script_vars;
 
   bool has_server_think = false;
@@ -56,6 +53,17 @@ public:
 
   void Destroy() { destroy_me = true; };
   bool IsMoving() { return Vector3Length(velocity) > 0.01f; };
+
+  bool IsMenuMode = false;
+  void UpdateInputMode()
+  {
+    if (!IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))
+      return;
+    IsMenuMode = !IsMenuMode;
+    IsMenuMode ? EnableCursor() : DisableCursor();
+    if (IsMenuMode)
+      velocity = {0, 0, 0};
+  };
 
   // overrides
   virtual void Update()
@@ -72,7 +80,13 @@ public:
     if (global_show_collisions)
     {
       Vector3 drawPos = Vector3Add(position, collision_offset);
-      DrawCubeWires(drawPos, collision_box.x, collision_box.y, collision_box.z, MAROON);
+      rlPushMatrix();
+      rlTranslatef(drawPos.x, drawPos.y, drawPos.z);
+
+      rlRotatef(angle, 0, 1, 0);
+
+      DrawCubeWires(Vector3{0, 0, 0}, collision_box.x, collision_box.y, collision_box.z, MAROON);
+      rlPopMatrix();
     }
   };
   virtual void DrawDebug() {};

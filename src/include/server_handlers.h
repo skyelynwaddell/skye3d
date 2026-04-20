@@ -14,6 +14,12 @@ inline std::unordered_map<std::string, ServerPacketHandler> float_handlers = {
      {
        RequestJoin(sender_id);
      }},
+    {"set_angle", [](int sender_id, const void *payload, size_t len)
+     {
+       float angle;
+       memcpy(&angle, payload, sizeof(float));
+       SetAngle(angle, sender_id);
+     }},
 
     // Add new float packet handlers here:
     // { "my_packet", [](int sender_id, const void* payload, size_t len) { ... } },

@@ -2106,21 +2106,17 @@ inline std::vector<BSP_BrushEntityData> BSP_SpawnBrushEntities()
     if (!entity.tags.count("classname"))
       continue;
 
-    // must reference a brush submodel ("*1", "*2", etc.)
-    if (!entity.tags.count("model"))
-      continue;
-    const std::string &model_key = entity.tags.at("model");
-    if (model_key.empty() || model_key[0] != '*')
-      continue;
+    bool is_brush = false;
+    std::string model_key;
 
-    int model_idx = 0;
-    try
+    if (entity.tags.count("model"))
     {
-      model_idx = std::stoi(model_key.substr(1));
-    }
-    catch (...)
-    {
-      continue;
+      model_key = entity.tags.at("model");
+      if (!model_key.empty() && model_key[0] == '*')
+        is_brush = true;
+        
+      if (!is_brush)
+        continue;
     }
 
     BSP_BrushEntityData data;
@@ -2133,6 +2129,22 @@ inline std::vector<BSP_BrushEntityData> BSP_SpawnBrushEntities()
       float qx = 0, qy = 0, qz = 0;
       sscanf(entity.tags.at("origin").c_str(), "%f %f %f", &qx, &qy, &qz);
       data.origin = FromQuake({qx, qy, qz});
+    }
+
+    // must reference a brush submodel ("*1", "*2", etc.)
+    if (!entity.tags.count("model"))
+    {
+      continue;
+    }
+
+    int model_idx = 0;
+    try
+    {
+      model_idx = std::stoi(model_key.substr(1));
+    }
+    catch (...)
+    {
+      continue;
     }
 
     // collect faces for this submodel

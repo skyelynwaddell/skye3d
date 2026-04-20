@@ -171,6 +171,21 @@ void enetserver_process_message(ENetEvent *event)
 };
 
 // In server.cpp or your main server logic
+//
+// NOTE: the previous implementation used a `{uint8_t type; int id; Vector3 pos;}`
+// struct and `enet_host_broadcast`. Both were wrong:
+//   1. The compiler inserts 3 bytes of alignment padding between `type` and
+//      `id`, so the wire format was [type][pad*3][id][pos], but the client
+//      decoder in client.cpp expects [type][id][pos] flat — every broadcast
+//      position arrived with a corrupted id and a 3-byte-shifted Vector3.
+//   2. `enet_host_broadcast` sends to every peer INCLUDING the host's own
+//      client, which then overwrote the already-correct position on the host
+//      with the echoed (and pre-fix, corrupted) value.
+// Fix: pack a flat [int id][Vector3 pos] payload and route it through
+// SendToClient (which prepends the type byte) to every peer except the host's
+// own client. This matches the SetPosition / RequestJoin wire format so the
+// client decoder stays unchanged.
+static int last_client_count = 0;
 static void enetserver_sync_entities()
 {
   if (!server_online)
@@ -178,28 +193,40 @@ static void enetserver_sync_entities()
 
   for (auto &obj : gameobjects)
   {
-    // We only sync objects that have a valid networked ID
-    // and aren't static environment pieces
-    if (obj->needs_sync)
+    if (last_client_count == client_count)
     {
-      obj->needs_sync = false;
+      if (!obj->needs_sync)
+        continue;
 
-      // Prepare the packet: [Type][ID][Vector3 Position]
-      struct
-      {
-        uint8_t type;
-        int id;
-        Vector3 pos;
-      } data;
+      if (client_count > 0)
+        obj->needs_sync = false;
+    }
 
-      data.type = MESSAGE_TYPE_INTERNAL_POS_UPDATE;
-      data.id = obj->client_id;
-      data.pos = obj->position;
+    last_client_count = client_count;
+    int id = obj->client_id;
 
-      ENetPacket *packet = enet_packet_create(&data, sizeof(data), ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT);
+    struct
+    {
+      int id;
+      Vector3 pos;
+    } pPos = {id, obj->position};
+    struct
+    {
+      int id;
+      float angle;
+    } pAngle = {id, obj->angle};
 
-      // Broadcast to all connected peers
-      enet_host_broadcast(server, 0, packet);
+    for (int i = 0; i < client_count; i++)
+    {
+      if (!users[i].peer)
+        continue;
+      if (users[i].player_id == my_local_player_id)
+        continue; // don't echo back to the host's own client
+
+      SendToClient(users[i].peer, MESSAGE_TYPE_INTERNAL_POS_UPDATE,
+                   &pPos, sizeof(pPos));
+      SendToClient(users[i].peer, MESSAGE_TYPE_INTERNAL_ANGLE_UPDATE,
+                   &pAngle, sizeof(pAngle));
     }
   }
 }

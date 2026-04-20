@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <memory>
 #include "fonts.h"
+#include "gameobject3d.h"
 
 // -----------------------------------------------------------------------
 // Global VM states
@@ -33,8 +34,10 @@ enum VM_TYPE
 // BSP entity spawning
 void luaCallEntitySpawner(const std::string &classname,
                           Vector3 origin,
-                          const std::unordered_map<std::string, std::string> &tags);
-void luaSpawnBSPEntities();
+                          const std::unordered_map<std::string, std::string> &tags,
+                          GameObject3D *obj);
+void luaSpawnBrushEntities();
+void luaSpawnEntities();
 
 // Run a named global function in a VM. If dt >= 0, it is passed as the arg.
 // If dt == -1.0f (default), the function is called with no arguments.

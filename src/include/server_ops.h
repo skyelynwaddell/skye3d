@@ -10,4 +10,5 @@ void SpawnPlayer(int id);
 void ConnectUser(ENetPeer *peer);
 void RequestJoin(int sender_id);
 void SetPosition(Vector3 new_pos, int sender_id);
+void SetAngle(float new_angle, int sender_id);
 void DisconnectUser(ENetPeer *peer);

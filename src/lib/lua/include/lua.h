@@ -39,7 +39,7 @@
 /*
 ** Pseudo-indices
 ** (-LUAI_MAXSTACK is the minimum valid index; we keep some free empty
-** space after that to help overflow detection)
+// ** space after that to help overflow detection)
 */
 #define LUA_REGISTRYINDEX	(-LUAI_MAXSTACK - 1000)
 #define lua_upvalueindex(i)	(LUA_REGISTRYINDEX - (i))

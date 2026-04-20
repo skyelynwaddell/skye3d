@@ -1,5 +1,8 @@
 -- sv_network.lua
 -- table to map packet names to functions
+_G.lastpos = 83
+_G.index = 0
+
 packet_funcs = {
 
   -- request_join
@@ -12,6 +15,10 @@ packet_funcs = {
     -- math.tointeger ensures the internal Lua type is shifted to an integer
     local cid = math.tointeger(packet.client_id)
     local val = math.tointeger(packet.value)
+
+    local obj = instance_create(0, 0, 0)
+    obj:set_position(_G.lastpos - (1 * _G.index), 20, 74)
+    _G.index = _G.index + 1
 
     if cid and val then
       sendflags_sync(cid, val)

@@ -1,73 +1,70 @@
-# Scripting Docs
+# Lua Scripting Docs
 
 ### [SV] Server Side
 
-```cpp
-// Networking
+```lua
+-- Networking
 void start_server(); // call at start of sv_init.nut
 int get_player_count(); // returns player count of the connected server
 void sendflags_sync(); // syncs the updated sendflags variable to server
 ```
 
-```cpp
-// instance creation & sub funcs
-local obj = instance_create(float x, float y, float z); // spawns a GameObject3D
-local objs = instances_get_all(); // returns an array of ALL gameobject references
-local objs = instances_get(string target_name); // returns an array of references to gameobjects with the same target_name (use "player" to return an array of all the players)
-local player = get_player_instance(int client_id); // returns reference of player object instance by client_id
-int get_instance_count(); // returns amount of spawned GameObject3D's in the world (including players)
+```lua
+-- instance creation & sub funcs
+local obj = instance_create(0,0,0); // spawns a GameObject3D
+local objs = instances_get_all(); // returns an array of ALL gameobject references"
+local objs = instances_get("player"); // returns an array of references to gameobjects with the same target_name (use "player" to return an array of all the players)
+local p = get_player_instance(int client_id); // returns reference of player object instance by client_id
+local n = get_instance_count(); // returns amount of spawned GameObject3D's in the world (including players)
 
-obj.destroy();  // destroys the GameObject3D
-obj.get(string variable_name); // gets a value of type [int, float, string, bool] by name
-obj.set(string variable_name, variant<int, float, string, bool> value); // sets a value of either [int, float, string, bool] by name
+obj:destroy();  // destroys the GameObject3D
+obj:get(string variable_name); // gets a value of type [int, float, string, bool] by name
+obj:set(string variable_name, variant<int, float, string, bool> value); // sets a value of either [int, float, string, bool] by name
 
-// transformation & physics
-obj.get_position(); // returns Vector3 table {x, y, z}
-obj.set_position(float x, float y, float z);
-obj.get_velocity(); // returns Vector3 table {x, y, z}
-obj.set_velocity(float x, float y, float z);
-obj.get_acceleration(); // returns Vector3 table {x, y, z}
-obj.set_acceleration(float x, float y, float z);
-obj.get_speed(); // returns float
-obj.set_speed(float speed);
-obj.get_size(); // returns Vector3 table {x, y, z}
-obj.set_size(float x, float y, float z);
+-- transformation & physics
+obj:get_position(); // returns Vector3 table {x, y, z}
+obj:set_position(float x, float y, float z);
+obj:get_velocity(); // returns Vector3 table {x, y, z}
+obj:set_velocity(float x, float y, float z);
+obj:get_acceleration(); // returns Vector3 table {x, y, z}
+obj:set_acceleration(float x, float y, float z);
+obj:get_speed(); // returns float
+obj:set_speed(float speed);
+obj:get_size(); // returns Vector3 table {x, y, z}
+obj:set_size(float x, float y, float z);
 
-// collision [position + collision_box = collision_area]
-obj.get_collision_box(); // returns table {width,height,length}
-obj.set_collision_box(float width, float height, float length);
+-- collision [position + collision_box = collision_area]
+obj:get_collision_box(); // returns table {width,height,length}
+obj:set_collision_box(float width, float height, float length);
 
-// targeting & identification
-obj.get_target_name();  // gets their target_name string
-obj.set_target_name(string name);
-obj.get_target(); // gets their target string
-obj.set_target(string name);
+-- targeting & identification
+obj:get_target_name();  // gets their target_name string
+obj:set_target_name(string name);
+obj:get_target(); // gets their target string
+obj:set_target(string name);
 
-// Create a function for an instance & run it
-function helloworld()
-{
-    // 'this' refers to the caller of this function
-    print("name: " + this.get("name"));
-    print("health: " + this.get("health"));
-    print("mana: " + this.get("mana"));
-    print("eliminated: " + this.get("eliminated"));
-};
-obj = instance_create(0, 0, 0);
-obj.set("name", "skye");
-obj.set("health", 100);
-obj.set("mana", 3.4);
-obj.set("eliminated", false);
-obj.helloworld();
+-- Create a function for an instance & run it
+function player_think(self, dt)
+    print("name: " .. self:get("name"));
+    print("health: " .. self:get("health"));
+    print("mana: " .. self:get("mana"));
+    print("eliminated: " .. self:get("eliminated"));
+end
+
+-- attach a script to the player
+function info_player_start(self,origin,tags)
+    self:set_think(player_think);
+end
 
 ```
 
 ### [SH] Shared
 
-```cpp
-// Variables
+```lua
+-- Variables
 string SIDE; // returns either CLIENT or SERVER side depending on if user is host
 
-// Networking
+-- Networking
 void send_packet_number(int client_id, string event_name, float data); // sends a packet to Server or Client
 void send_packet_vector3(int client_id, string event_name, Vector3 data); // sends a packet to Server or Client
 Packet get_packet(); // returns a Packet object {client_id, name, data} when received from Server or Client
@@ -86,7 +83,7 @@ int get_random_value(int min, int max) // returns an inclusive range of min-max
 
 ### [CL] Client Side
 
-```cpp
+```lua
 // Networking
 void connect_to_server(); // connects client to a server
 
@@ -199,12 +196,12 @@ enum COLOR {
 
 ```
 
-### PACKET
+### PACKET_TYPE
 
 ```c
 // [ie. PACKET.NUMBER]
 // Packets
-enum PACKET {
+enum PACKET_TYPE {
     NUMBER = 0,
     VECTOR3 = 1,
     STRING = 2,

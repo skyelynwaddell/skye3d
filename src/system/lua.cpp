@@ -361,6 +361,12 @@ static void register_gameobject3d_usertype(sol::state &lua, bool is_server)
       "get_size", [](GameObject3D &self, sol::this_state ts)
       { return Vec3ToTable(sol::state_view(ts), self.size); },
 
+      // ----- angle -----
+      "set_angle", [](GameObject3D &self, double angle)
+      { self.angle = (float)angle; },
+      "get_angle", [](GameObject3D &self, sol::this_state ts)
+      { return (double)self.angle; },
+
       // ----- acceleration / speed -----
       "set_acceleration", [](GameObject3D &self, double a)
       { self.acceleration = (float)a; },
@@ -461,8 +467,10 @@ static void bind_globals(sol::state &lua, bool is_server)
     lua.set_function("start_server", []()
                      { enetserver_start(); });
 
-    lua.set_function("sendflags_sync", [](int player_id, int flags_val)
+    lua.set_function("sendflags_sync", [](float _player_id, float _flags_val)
                      {
+                       int player_id = static_cast<int>(_player_id);
+                       int flags_val = static_cast<int>(_flags_val);
       if (player_id < 0 || player_id >= MAX_PLAYERS || users[player_id].object_ref == nullptr)
         return;
       GameObject3D *obj = users[player_id].object_ref;
@@ -474,7 +482,10 @@ static void bind_globals(sol::state &lua, bool is_server)
                      { return client_count; });
 
     lua.set_function("instance_create", [](double x, double y, double z) -> GameObject3D *
-                     { return InstanceCreate<GameObject3D>(Vector3{(float)x, (float)y, (float)z}); });
+                     { auto obj = InstanceCreate<GameObject3D>(Vector3{(float)x, (float)y, (float)z});
+                     obj->client_id = spawned_instance_id++;
+                     obj->needs_sync = true;
+                                                               return obj; });
 
     lua.set_function("get_instance_count", []()
                      { return (int)gameobjects.size(); });
@@ -684,8 +695,9 @@ static void bind_globals(sol::state &lua, bool is_server)
   // Client  → CPP server (over ENet)
   // Server  → target client (local or remote), or broadcast if target_id == -1
   lua.set_function("send_packet_number",
-                   [&lua](int target_id, const std::string &name, double val)
+                   [&lua](float _target_id, const std::string &name, double val)
                    {
+                     int target_id = static_cast<int>(_target_id);
                      bool from_client = (&lua == client_lua.get());
                      float fv = (float)val;
                      if (from_client)
@@ -1042,8 +1054,7 @@ void luaCallEntitySpawner(const std::string &classname,
   luaCallEntitySpawnerInVM(client_lua.get(), classname, origin, tags, obj);
 }
 
-inline int brush_sync_id = 1000;
-void luaSpawnBSPEntities()
+void luaSpawnBrushEntities()
 {
   brush_sync_id = 1000;
   for (auto &obj_ptr : gameobjects)
@@ -1060,6 +1071,53 @@ void luaSpawnBSPEntities()
     luaCallEntitySpawner(brush_obj->classname, brush_obj->position, brush_obj->tags, brush_obj);
   }
 }
+
+void luaSpawnEntities()
+{
+  BSP_File &bsp = *bsp_renderer.bsp_file;
+
+  for (auto &entity : bsp.entities())
+  {
+    // must have a classname
+    if (!entity.tags.count("classname"))
+      continue;
+
+    bool is_brush = false;
+    std::string model_key;
+
+    if (entity.tags.count("model"))
+    {
+      model_key = entity.tags.at("model");
+      if (!model_key.empty() && model_key[0] == '*')
+        is_brush = true;
+    }
+
+    if (is_brush)
+      continue;
+
+    BSP_BrushEntityData data;
+    data.classname = entity.tags.at("classname");
+
+    // discard some specific objects
+    if (data.classname == "light")
+      continue;
+
+    data.tags = entity.tags;
+
+    // parse origin ("x y z" in Quake space) → raylib space
+    if (entity.tags.count("origin"))
+    {
+      float qx = 0, qy = 0, qz = 0;
+      sscanf(entity.tags.at("origin").c_str(), "%f %f %f", &qx, &qy, &qz);
+      data.origin = FromQuake({qx, qy, qz});
+    }
+
+    auto newobj = InstanceCreate<GameObject3D>(data.origin);
+    newobj->classname = data.classname;
+    newobj->client_id = brush_sync_id++;
+    luaCallEntitySpawner(newobj->classname, newobj->position, newobj->tags, newobj);
+  }
+};
 
 // -----------------------------------------------------------------------
 // Public entry points
@@ -1092,7 +1150,8 @@ void luaUpdate(float dt)
   if (!spawned)
   {
     spawned = true;
-    luaSpawnBSPEntities();
+    luaSpawnBrushEntities(); // spawn brush entities
+    luaSpawnEntities();      // spawn entities
     printf("Spawned all ents!\n");
   }
 
@@ -1119,14 +1178,6 @@ void luaUpdate(float dt)
   {
     luaRunFunc(*client_lua, "update", dt);
     run_thinks(*client_lua, g_client_thinks, dt);
-
-    for (auto &obj : gameobjects)
-    {
-      // make sure this isnt a player object
-      if (obj->client_id < 0)
-      {
-      }
-    }
   }
 }
 

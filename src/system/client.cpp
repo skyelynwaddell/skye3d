@@ -304,6 +304,34 @@ void enetclient_update()
 
         if (!found)
         {
+          // probably an instance the server spawned
+          auto newobj = InstanceCreate<GameObject3D>(pos);
+          newobj->client_id = id;
+        }
+
+        continue;
+      }
+      else if (type == MESSAGE_TYPE_INTERNAL_ANGLE_UPDATE)
+      {
+        int id;
+        float angle;
+
+        memcpy(&id, payload, sizeof(int));
+        memcpy(&angle, payload + sizeof(int), sizeof(float));
+        enet_packet_destroy(event.packet);
+
+        if (id == my_local_player_id)
+          continue;
+
+        bool found = false;
+        for (auto &obj : gameobjects)
+        {
+          if (obj->client_id == id)
+          {
+            obj->angle = angle;
+            found = true;
+            break;
+          }
         }
 
         continue;
