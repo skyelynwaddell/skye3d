@@ -11,6 +11,8 @@ class Player : public GameObject3D
 {
 public:
   std::string target_name = "player";
+  Vector3 collision_box = {1.0f, 2.0f, 1.0f};
+  Vector3 collision_offset = {0.0f, 1.0f, 0.0f};
 
   /*
 HandleRotation

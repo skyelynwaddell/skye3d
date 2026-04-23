@@ -298,6 +298,11 @@ static void register_lua_types(sol::state &lua)
       "x", &Vector3::x,
       "y", &Vector3::y,
       "z", &Vector3::z);
+
+  lua.new_usertype<BoundingBox>(
+      "BoundingBox",
+      "min", &BoundingBox::min,
+      "max", &BoundingBox::max);
 };
 
 // -----------------------------------------------------------------------
@@ -326,16 +331,17 @@ static void register_gameobject3d_usertype(sol::state &lua, bool is_server)
       "spawnflags", &GameObject3D::spawnflags,
       "position", &GameObject3D::position,
       "velocity", &GameObject3D::velocity,
-      "size", &GameObject3D::size,
       "acceleration", &GameObject3D::acceleration,
       "speed", &GameObject3D::speed,
       "collision_box", &GameObject3D::collision_box,
+      "collision_offset", &GameObject3D::collision_offset,
 
       // ----- generic script_vars interface (maps to set()/get()) -----
       "set", [](GameObject3D &self, const std::string &key, sol::object value)
       {
         if (auto sv = LuaToScriptValue(value))
-          self.script_vars[key] = *sv; },
+          self.script_vars[key] = *sv;
+        self.sync_flags = SYNC_SCRIPTVARS; },
       "get", [](GameObject3D &self, const std::string &key, sol::this_state ts) -> sol::object
       {
     sol::state_view lua(ts);
@@ -352,8 +358,7 @@ static void register_gameobject3d_usertype(sol::state &lua, bool is_server)
       "destroy", [](GameObject3D &self)
       {
         self.Destroy();
-        luaClearThinks(&self); },
-      "is_valid", [](GameObject3D & /*self*/)
+        luaClearThinks(&self); }, "is_valid", [](GameObject3D & /*self*/)
       { return true; }, // sol2 nil-checks for you
 
       // ----- target name / target -----
@@ -361,14 +366,39 @@ static void register_gameobject3d_usertype(sol::state &lua, bool is_server)
       { return self.target_name; },
       "set_target_name", [](GameObject3D &self, const std::string &v)
       { self.target_name = v; },
+      "set_model", [](GameObject3D &self, const std::string &v)
+      {
+        self.game_model.model_path = v;
+        self.game_model.model = GetModelCached(v.c_str());
+        self.sync_flags = SYNC_MODEL; },
+      "set_model_scale", [](GameObject3D &self, double x, double y, double z)
+      { self.game_model.scale = Vector3{(float)x, (float)y, (float)z};
+        self.sync_flags = SYNC_MODEL; },
+
       "get_target", [](GameObject3D &self)
-      { return self.target; },
-      "set_target", [](GameObject3D &self, const std::string &v)
+      { return self.target; }, "set_target", [](GameObject3D &self, const std::string &v)
       { self.target = v; },
+
+      "get_visible", [](GameObject3D &self)
+      { return self.visible; },
+
+      "set_visible", [](GameObject3D &self, bool v)
+      { 
+        self.visible = v; 
+        self.sync_flags |= SYNC_VISIBLE; },
+
+      "get_aabb", [](GameObject3D &self) -> BoundingBox
+      { 
+        auto* brush = dynamic_cast<BrushEntity*>(&self);
+        if (brush)
+            return brush->GetBoundingBox();
+
+        return (BoundingBox){ self.position, self.position }; },
 
       // Distance Checks
       "find_closest_object", [](GameObject3D &self, double max_dist)
-      { return self.FindClosestObject(static_cast<float>(max_dist)); },
+      { return self.FindClosestObject(static_cast<float>(max_dist)); }, "find_all_objects_in_range", [](GameObject3D &self, double max_dist)
+      { return self.FindAllObjectsInRange(static_cast<float>(max_dist)); },
 
       // Trigger effects
       "set_trigger", [](GameObject3D &self, sol::main_protected_function fn)
@@ -382,61 +412,52 @@ static void register_gameobject3d_usertype(sol::state &lua, bool is_server)
             sol::error err = result;
             std::cerr << "LUA Trigger Error: " << err.what() << std::endl;
         }
-    }; },
-      "on_trigger", [](GameObject3D &self)
+    }; }, "on_trigger", [](GameObject3D &self)
       { self.OnTrigger(); },
 
       // ----- position -----
       "set_position", [](GameObject3D &self, double x, double y, double z)
-      { self.position = Vector3{(float)x, (float)y, (float)z}; },
-      "get_position", [](GameObject3D &self, sol::this_state ts)
+      { self.position = Vector3{(float)x, (float)y, (float)z}; }, "get_position", [](GameObject3D &self, sol::this_state ts)
       { return Vec3ToTable(sol::state_view(ts), self.position); },
 
       // ----- velocity -----
       "set_velocity", [](GameObject3D &self, double x, double y, double z)
-      { self.velocity = Vector3{(float)x, (float)y, (float)z}; },
-      "get_velocity", [](GameObject3D &self, sol::this_state ts)
+      { self.velocity = Vector3{(float)x, (float)y, (float)z}; }, "get_velocity", [](GameObject3D &self, sol::this_state ts)
       { return Vec3ToTable(sol::state_view(ts), self.velocity); },
 
       // ----- size -----
-      "set_size", [](GameObject3D &self, double x, double y, double z)
-      { self.size = Vector3{(float)x, (float)y, (float)z}; },
-      "get_size", [](GameObject3D &self, sol::this_state ts)
-      { return Vec3ToTable(sol::state_view(ts), self.size); },
+      "set_size", [](GameObject3D &self, sol::table _box, sol::table _offset)
+      { 
+        auto getVec = [](sol::table t) -> Vector3 {
+            return Vector3{
+                t.get_or(1, 0.0f), // x
+                t.get_or(2, 0.0f), // y
+                t.get_or(3, 0.0f)  // z
+            };
+        };
+
+    self.collision_box = getVec(_box);
+    self.collision_offset = getVec(_offset); 
+    self.sync_flags |= SYNC_SIZE; },
 
       // ----- angle -----
       "set_angle", [](GameObject3D &self, double angle)
-      { self.angle = (float)angle; },
-      "get_angle", [](GameObject3D &self, sol::this_state ts)
+      { self.angle = (float)angle; }, "get_angle", [](GameObject3D &self, sol::this_state ts)
       { return (double)self.angle; },
 
       // ----- acceleration / speed -----
       "set_acceleration", [](GameObject3D &self, double a)
-      { self.acceleration = (float)a; },
-      "get_acceleration", [](GameObject3D &self)
-      { return (double)self.acceleration; },
-      "set_speed", [](GameObject3D &self, double s)
-      { self.speed = (float)s; },
-      "get_speed", [](GameObject3D &self)
+      { self.acceleration = (float)a; }, "get_acceleration", [](GameObject3D &self)
+      { return (double)self.acceleration; }, "set_speed", [](GameObject3D &self, double s)
+      { self.speed = (float)s; }, "get_speed", [](GameObject3D &self)
       { return (double)self.speed; },
-
-      // ----- collision box -----
-      "set_collision_box", [](GameObject3D &self, double x, double y, double z)
-      { self.collision_box = Vector3{(float)x, (float)y, (float)z}; },
-      "get_collision_box", [](GameObject3D &self, sol::this_state ts)
-      {
-        sol::state_view lv(ts);
-        sol::table t = lv.create_table();
-        t["width"]  = self.collision_box.x;
-        t["height"] = self.collision_box.y;
-        t["length"] = self.collision_box.z;
-        return t; },
 
       // ----- classname -----
       "get_classname", [](GameObject3D &self)
-      { return self.classname; },
-      "set_classname", [](GameObject3D &self, const std::string &v)
-      { self.classname = v; },
+      { return self.classname; }, "set_classname", [](GameObject3D &self, const std::string &v)
+      { 
+        self.classname = v; 
+        self.sync_flags |= SYNC_CLASSNAME; },
 
       // ----- think function -----
       // Scripts call: obj:set_think(function(self, dt) ... end)
@@ -527,7 +548,7 @@ static void bind_globals(sol::state &lua, bool is_server)
     lua.set_function("instance_create", [](double x, double y, double z) -> GameObject3D *
                      { auto obj = InstanceCreate<GameObject3D>(Vector3{(float)x, (float)y, (float)z});
                      obj->client_id = spawned_instance_id++;
-                     obj->needs_sync = true;
+                     obj->sync_flags = SYNC_ALL;
                                                                return obj; });
 
     lua.set_function("get_instance_count", []()
@@ -1155,7 +1176,35 @@ void luaSpawnEntities()
       data.origin = FromQuake({qx, qy, qz});
     }
 
+    // parse angle (single float)
+    if (entity.tags.count("angle"))
+    {
+      data.angle = std::stof(entity.tags.at("angle"));
+    }
+
+    // parse spawn flags
+    if (entity.tags.count("spawnflags"))
+    {
+      data.spawn_flags = std::stoi(entity.tags.at("spawnflags"));
+    }
+
+    // target
+    if (entity.tags.count("target"))
+    {
+      data.target = entity.tags.at("target");
+    }
+
+    // targetname
+    if (entity.tags.count("targetname"))
+    {
+      data.target_name = entity.tags.at("targetname");
+    }
+
     auto newobj = InstanceCreate<GameObject3D>(data.origin);
+    newobj->angle = data.angle;
+    newobj->spawn_flags = data.spawn_flags;
+    newobj->target = data.target;
+    newobj->target_name = data.target_name;
     newobj->classname = data.classname;
     newobj->client_id = brush_sync_id++;
     luaCallEntitySpawner(newobj->classname, newobj->position, newobj->tags, newobj);

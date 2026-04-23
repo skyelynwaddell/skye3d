@@ -11,7 +11,7 @@ inline std::unique_ptr<Camera> camera;
 inline long shader_mod_time;
 inline Shader shader;
 inline Light camera_light;
-inline int light_power = 30;
+inline int light_power = 20;
 
 // Post-processing
 inline Shader pp_bloom_extract;
@@ -20,15 +20,16 @@ inline Shader pp_composite;
 inline RenderTexture2D pp_scene_fbo;   // full-res scene render
 inline RenderTexture2D pp_bloom_fbo_a; // half-res bloom ping
 inline RenderTexture2D pp_bloom_fbo_b; // half-res bloom pong
+inline RenderTexture2D pp_gui_fbo;     // gui fbo
 
 // Post-process tunspables
 inline float pp_bloom_threshold = 0.55f;
 inline float pp_bloom_knee = 0.3f;
-inline float pp_bloom_intensity = 0.8f;
-inline float pp_exposure = 0.6f;
-inline float pp_saturation = 1.2f;
-inline float pp_warmth = 0.15f;
-inline float pp_vignette_strength = 0.3f;
+inline float pp_bloom_intensity = 1.5f;
+inline float pp_exposure = 0.3f;
+inline float pp_saturation = 1.3f;
+inline float pp_warmth = 0.2f;
+inline float pp_vignette_strength = 0.5f;
 
 static bool HandleMouseCursorActive()
 {
@@ -116,6 +117,7 @@ inline void PostProcess_CreateFBOs(int w, int h)
   pp_scene_fbo = LoadRenderTexture(w, h);
   pp_bloom_fbo_a = LoadRenderTexture(w / 2, h / 2);
   pp_bloom_fbo_b = LoadRenderTexture(w / 2, h / 2);
+  pp_gui_fbo = LoadRenderTexture(w, h);
 }
 
 inline void PostProcess_DestroyFBOs()
@@ -123,6 +125,7 @@ inline void PostProcess_DestroyFBOs()
   UnloadRenderTexture(pp_scene_fbo);
   UnloadRenderTexture(pp_bloom_fbo_a);
   UnloadRenderTexture(pp_bloom_fbo_b);
+  UnloadRenderTexture(pp_gui_fbo);
 }
 
 inline void PostProcess_SetUniforms()

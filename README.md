@@ -25,15 +25,6 @@ A **server-client 3D multiplayer game engine** built with C++, Raylib for render
 
 ## Getting Started
 
-### Prerequisites
-
-- C++23 compiler
-- [Raylib](https://www.raylib.com/)
-- [ENet](#)
-- [ImGui](#)
-- [rlImGui](#)
-- [lua & sol2](#)
-
 ### Build
 
 ```bash
@@ -48,11 +39,14 @@ ninja
 ### Run
 
 ```bash
-# Start as server
+# Host
 edit `settings.cfg` > set 'is_hosting=true'
 
-# Start as client
+# Client
 edit `settings.cfg` > set 'is_hosting=false'
+
+# Start application
+run `game.exe`
 ```
 
 ---

@@ -277,6 +277,10 @@ void enetclient_update()
           obj->client_id = id_to_spawn;
           users[id_to_spawn].object_ref = obj;
           users[id_to_spawn].player_id = id_to_spawn;
+
+          obj->classname = "dummy_player";
+          obj->collision_box = {1.0f, 2.0f, 1.0f};
+          obj->collision_offset = {0.0f, 0.0f, 0.0f};
         }
       }
       else if (type == MESSAGE_TYPE_INTERNAL_POS_UPDATE)
@@ -334,6 +338,187 @@ void enetclient_update()
           }
         }
 
+        continue;
+      }
+      else if (type == MESSAGE_TYPE_INTERNAL_SIZE_UPDATE)
+      {
+        int id;
+        Vector3 box;
+        Vector3 offset;
+
+        memcpy(&id, payload, sizeof(int));
+        memcpy(&box, payload + sizeof(int), sizeof(Vector3));
+        memcpy(&offset, payload + sizeof(int) + sizeof(Vector3), sizeof(Vector3));
+        enet_packet_destroy(event.packet);
+
+        if (id == my_local_player_id)
+          continue;
+
+        bool found = false;
+        for (auto &obj : gameobjects)
+        {
+          if (obj->client_id == id)
+          {
+            obj->collision_box = box;
+            obj->collision_offset = offset;
+            found = true;
+            break;
+          }
+        }
+
+        continue;
+      }
+      else if (type == MESSAGE_TYPE_INTERNAL_CLASSNAME_UPDATE)
+      {
+        int id;
+        char classname[64];
+
+        memcpy(&id, payload, sizeof(int));
+        memcpy(&classname, payload + sizeof(int), sizeof(char[64]));
+        enet_packet_destroy(event.packet);
+
+        if (id == my_local_player_id)
+          continue;
+
+        bool found = false;
+        for (auto &obj : gameobjects)
+        {
+          if (obj->client_id == id)
+          {
+            obj->classname = classname;
+            found = true;
+            break;
+          }
+        }
+
+        continue;
+      }
+      else if (type == MESSAGE_TYPE_INTERNAL_VISIBLE_UPDATE)
+      {
+        int id;
+        bool visible;
+
+        memcpy(&id, payload, sizeof(int));
+        memcpy(&visible, payload + sizeof(int), sizeof(bool));
+        enet_packet_destroy(event.packet);
+
+        if (id == my_local_player_id)
+          continue;
+
+        bool found = false;
+        for (auto &obj : gameobjects)
+        {
+          if (obj->client_id == id)
+          {
+            obj->visible = visible;
+            found = true;
+            break;
+          }
+        }
+
+        continue;
+      }
+      else if (type == MESSAGE_TYPE_INTERNAL_MODEL_UPDATE)
+      {
+        int id;
+        char model_path[128];
+        Vector3 scale;
+
+        memcpy(&id, payload, sizeof(int));
+        memcpy(&model_path, payload + sizeof(int), sizeof(char[128]));
+        memcpy(&scale, payload + sizeof(int) + sizeof(char[128]), sizeof(Vector3));
+        enet_packet_destroy(event.packet);
+
+        if (id == my_local_player_id)
+          continue;
+
+        bool found = false;
+        for (auto &obj : gameobjects)
+        {
+          if (obj->client_id == id)
+          {
+            obj->game_model.model_path = model_path;
+            obj->game_model.scale = scale;
+            obj->game_model.model = GetModelCached(obj->game_model.model_path);
+            found = true;
+            break;
+          }
+        }
+
+        continue;
+      }
+      else if (type == MESSAGE_TYPE_INTERNAL_SCRIPTVARS_UPDATE)
+      {
+        uint8_t *ptr = (uint8_t *)payload;
+
+        int id;
+        memcpy(&id, ptr, sizeof(int));
+        ptr += sizeof(int);
+
+        int varCount;
+        memcpy(&varCount, ptr, sizeof(int));
+        ptr += sizeof(int);
+
+        std::unordered_map<std::string, ScriptValue> new_vars;
+
+        for (int i = 0; i < varCount; i++)
+        {
+          // Read Key
+          int keyLen;
+          memcpy(&keyLen, ptr, sizeof(int));
+          ptr += sizeof(int);
+          std::string key((char *)ptr, keyLen);
+          ptr += keyLen;
+
+          // Read Type
+          int typeIndex;
+          memcpy(&typeIndex, ptr, sizeof(int));
+          ptr += sizeof(int);
+
+          // Read Value
+          if (typeIndex == 0)
+          { // string
+            int sLen;
+            memcpy(&sLen, ptr, sizeof(int));
+            ptr += sizeof(int);
+            std::string s((char *)ptr, sLen);
+            ptr += sLen;
+            new_vars[key] = s;
+          }
+          else if (typeIndex == 1)
+          { // float
+            float f;
+            memcpy(&f, ptr, sizeof(float));
+            ptr += sizeof(float);
+            new_vars[key] = f;
+          }
+          else if (typeIndex == 2)
+          { // bool
+            bool b = (*ptr == 1);
+            ptr += 1;
+            new_vars[key] = b;
+          }
+          else if (typeIndex == 3)
+          { // int
+            int val;
+            memcpy(&val, ptr, sizeof(int));
+            ptr += sizeof(int);
+            new_vars[key] = val;
+          }
+        }
+
+        if (id != my_local_player_id)
+        {
+          for (auto &obj : gameobjects)
+          {
+            if (obj->client_id == id)
+            {
+              obj->script_vars = new_vars;
+              break;
+            }
+          }
+        }
+        enet_packet_destroy(event.packet);
         continue;
       }
       else if (type == MESSAGE_TYPE_ASSIGN_ID)

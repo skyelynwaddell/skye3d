@@ -12,12 +12,25 @@
 #include <functional>
 #include <vector>
 #include "bsp.h"
+#include "gamemodel.h"
 
 void SendToClient(ENetPeer *peer, uint8_t type, const void *data, size_t data_len);
 
 /*
 UpdateInputMode
 */
+enum SyncFlags
+{
+  SYNC_NONE = 0,
+  SYNC_POS = 1 << 0,        // 1
+  SYNC_ANGLE = 1 << 1,      // 2
+  SYNC_MODEL = 1 << 2,      // 4 (for when an entity changes skins/models)
+  SYNC_SIZE = 1 << 3,       // 5 updates collision size
+  SYNC_CLASSNAME = 1 << 4,  // 5 updates collision size
+  SYNC_VISIBLE = 1 << 5,    // 5 updates collision size
+  SYNC_SCRIPTVARS = 1 << 5, // 5 updates collision size
+  SYNC_ALL = 0xFFFF
+};
 
 // GameObject3D
 using ScriptValue = std::variant<std::string, float, bool, int>; // value a .nut script variable can be
@@ -26,9 +39,11 @@ class GameObject3D
 public:
   virtual ~GameObject3D() = default;
   int client_id = -1; // multiplayer client id only for player objects
-  bool needs_sync = true;
+  int sync_flags = SYNC_NONE;
+  int spawn_flags = 0;
   bool is_me = false;
   bool destroy_me = false;
+  bool visible = true;
   std::string classname = "";
   std::string target_name = "";
   std::string target = "";
@@ -37,18 +52,21 @@ public:
   Vector3 spawn_origin = {0, 0, 0};
   std::unordered_map<std::string, std::string> tags;
   Vector3 last_position = {0.0f, 0.0f, 0.0f};
+  Vector3 collision_box = {1.0f, 2.0f, 1.0f};
   Vector3 collision_offset = {0.0f, 0.0f, 0.0f};
-  Vector3 collision_box = {0.5f, 0.6f, 0.5f};
-  Vector3 size = {0.5f, 0.6f, 0.5f};
   float speed = 200.0f;
   float acceleration = 20.0f;
   int sendflags = 0;
   int spawnflags = 0;
   float angle = 0;
+  float last_angle = 0;
   int leaf_id = 0;
+  GameModel game_model = {};
   std::function<void(GameObject3D *)> on_trigger_fn;
 
   std::unordered_map<std::string, ScriptValue> script_vars;
+
+  Color debug_color = MAROON;
 
   bool has_server_think = false;
   bool has_client_think = false;
@@ -72,6 +90,7 @@ public:
     return position;
   }
 
+  std::vector<GameObject3D *> FindAllObjectsInRange(float max_dist);
   GameObject3D *FindClosestObject(float max_dist);
 
   // overrides
@@ -82,25 +101,74 @@ public:
       if (Vector3Equals(position, last_position) == false)
       {
         leaf_id = bsp_renderer.FindLeaf(position);
-        needs_sync = true;
+        sync_flags |= SYNC_POS;
       }
+      if (angle != last_angle)
+        sync_flags |= SYNC_ANGLE;
+
       last_position = position;
+      last_angle = angle;
     }
   };
+
+  void set_size(Vector3 min, Vector3 max)
+  {
+    // collision_box is max - min
+    collision_box = {
+        max.x - min.x,
+        max.y - min.y,
+        max.z - min.z};
+
+    // collision_offset is the center of that box relative to the origin (0,0,0)
+    // origin is often at the feet, so the offset isn't always zero.
+    collision_offset = {
+        (min.x + max.x) * 0.5f,
+        (min.y + max.y) * 0.5f,
+        (min.z + max.z) * 0.5f};
+  };
+
   virtual void Draw()
   {
+    if (game_model.model.meshCount > 0 && visible)
+      DrawModelEx(
+          game_model.model,
+          {
+              position.x,
+              position.y - (collision_box.y / 2),
+              position.z,
+          },
+          {0, 1, 0}, // rotate around Y
+          angle,
+          game_model.scale,
+          WHITE);
+
     if (global_show_collisions)
     {
-      Vector3 drawPos = Vector3Add(position, collision_offset);
+
       rlPushMatrix();
-      rlTranslatef(drawPos.x, drawPos.y, drawPos.z);
-
+      rlTranslatef(position.x, position.y, position.z);
       rlRotatef(angle, 0, 1, 0);
+      rlTranslatef(collision_offset.x, collision_offset.y, collision_offset.z);
 
-      DrawCubeWires(Vector3{0, 0, 0}, collision_box.x, collision_box.y, collision_box.z, MAROON);
+      Color debug_color = MAGENTA;
+      if (classname.starts_with("path"))
+        debug_color = SKYBLUE;
+      else if (classname.starts_with("info"))
+        debug_color = GRAY;
+      else if (classname.starts_with("monster"))
+        debug_color = MAROON;
+      else if (classname.starts_with("item"))
+        debug_color = PURPLE;
+      else if (classname.starts_with("weapon"))
+        debug_color = BLUE;
+      else if (classname.starts_with("player"))
+        debug_color = YELLOW;
+
+      DrawCubeWires(Vector3{0, 0, 0}, collision_box.x, collision_box.y, collision_box.z, debug_color);
+
       rlPopMatrix();
     }
-  };
+  }
 
   virtual void OnTrigger()
   {

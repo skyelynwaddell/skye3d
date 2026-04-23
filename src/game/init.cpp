@@ -16,6 +16,7 @@ void Init()
   SetWindowState(FLAG_WINDOW_MAXIMIZED);
   rlEnableBackfaceCulling();
   rlImGuiSetup(false);
+  CharacterShader_Init();
 
   if (global_is_hosting)
     luaStartServer();

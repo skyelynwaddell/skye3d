@@ -32,17 +32,23 @@ public:
   {
     classname = data.classname;
     tags = data.tags;
-    position = data.origin;
     target_name = GetTag("targetname");
     target = GetTag("target");
     brush_model = data.model;
     has_model = data.has_model;
     clipnode_root = data.clipnode_root;
+
+    position = data.origin;
     spawn_origin = data.origin;
 
     bsp_collider.entity_hulls.push_back({clipnode_root,
                                          &position,
                                          data.origin});
+
+    if (classname.starts_with("trigger"))
+    {
+      visible = false;
+    }
 
     printf("BRUSH ENTITY CREATED: %p | Class: %s\n", (void *)this, classname.c_str());
     printf("  Spawn Origin: (%.2f, %.2f, %.2f)\n", spawn_origin.x, spawn_origin.y, spawn_origin.z);
@@ -56,18 +62,34 @@ public:
     return it != tags.end() ? it->second : fallback;
   }
 
+  BoundingBox GetBoundingBox()
+  {
+    if (!has_model)
+      return {position, position};
+
+    BoundingBox box = GetModelBoundingBox(brush_model);
+
+    Vector3 current_movement = Vector3Subtract(position, spawn_origin);
+
+    box.min = Vector3Add(box.min, current_movement);
+    box.max = Vector3Add(box.max, current_movement);
+
+    return box;
+  }
+
   Vector3 GetInteractCenter() override
   {
     if (has_model)
     {
-      BoundingBox box = GetModelBoundingBox(brush_model);
-      Vector3 center = {
+      BoundingBox box = GetBoundingBox();
+
+      if (isnan(box.min.x) || isinf(box.min.x))
+        return position;
+
+      return {
           (box.min.x + box.max.x) * 0.5f,
           (box.min.y + box.max.y) * 0.5f,
           (box.min.z + box.max.z) * 0.5f};
-
-      // Add the entity's current position (not delta)
-      return Vector3Add(center, position);
     }
     return position;
   }
@@ -84,16 +106,24 @@ public:
 
   void Draw() override
   {
-    // !classname.starts_with("trigger")
     if (has_model)
     {
-      Vector3 offset = Vector3Subtract(position, spawn_origin);
+      if (visible)
+      {
+        BoundingBox bb = GetModelBoundingBox(brush_model);
 
-      // Draw the model using the offset to move the baked vertices
-      DrawModel(brush_model, offset, 1.0f, WHITE);
-      DrawModelWires(brush_model, offset, 1.0f, RED);
+        Vector3 model_center = {
+            (bb.min.x + bb.max.x) * 0.5f,
+            (bb.min.y + bb.max.y) * 0.5f,
+            (bb.min.z + bb.max.z) * 0.5f};
+        Vector3 draw_offset = Vector3Subtract(position, model_center);
+        DrawModel(brush_model, draw_offset, 1.001f, WHITE); // scale up 0.001 so we dont z-fight
+      }
+
+      if (global_show_collisions)
+        DrawBoundingBox(GetBoundingBox(), GREEN);
     }
-  }
+  };
 
   void DrawDebug() override
   {

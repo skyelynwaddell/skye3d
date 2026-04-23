@@ -14,6 +14,7 @@
 #include <vector>
 #include <assert.h>
 #include <cfloat>
+#include <map>
 
 #include "global.h"
 
@@ -656,18 +657,28 @@ static inline Mesh GenMeshFaces(BSP_File &map, std::span<const Face> faces)
   }
 
   Mesh mesh{};
+
   mesh.vertexCount = vertices.size();
-  mesh.vertices = (float *)vertices.data();
-  mesh.texcoords = (float *)texcoords.data();
-  mesh.normals = (float *)normals.data();
-  mesh.colors = colors.data();
+
+  // Allocate persistent memory (raylib will free this)
+  mesh.vertices = (float *)malloc(vertices.size() * sizeof(Vector3));
+  mesh.texcoords = (float *)malloc(texcoords.size() * sizeof(Vector2));
+  mesh.normals = (float *)malloc(normals.size() * sizeof(Vector3));
+  mesh.colors = (unsigned char *)malloc(colors.size() * sizeof(unsigned char));
+
+  // Copy data
+  memcpy(mesh.vertices, vertices.data(), vertices.size() * sizeof(Vector3));
+  memcpy(mesh.texcoords, texcoords.data(), texcoords.size() * sizeof(Vector2));
+  memcpy(mesh.normals, normals.data(), normals.size() * sizeof(Vector3));
+  memcpy(mesh.colors, colors.data(), colors.size() * sizeof(unsigned char));
+
   UploadMesh(&mesh, false);
 
   // So the free functions don't complain later on
-  mesh.vertices = (float *)malloc(1);
-  mesh.texcoords = (float *)malloc(1);
-  mesh.normals = (float *)malloc(1);
-  mesh.colors = (unsigned char *)malloc(4);
+  // mesh.vertices = (float *)malloc(1);
+  // mesh.texcoords = (float *)malloc(1);
+  // mesh.normals = (float *)malloc(1);
+  // mesh.colors = (unsigned char *)malloc(4);
   return mesh;
 };
 
@@ -717,6 +728,56 @@ struct PVS
     return visible;
   }
 };
+
+// BSP shader uniforms
+inline Vector3 bsp_flashPos = {0, 0, 0};
+inline Vector3 bsp_flashDir = {0, 0, -1};
+inline Vector4 bsp_flashColor = {30.0f, 30.0f, 30.0f, 1.0f};
+inline float bsp_flashIntensity = 0.1f;
+inline float bsp_flashRange = 30.0f;
+inline float bsp_flashConeAngle = 35.0f; // 35° cone
+inline int bsp_flashEnabled = 1;
+
+inline void BSP_UpdateFlashlight(Camera *cam, Shader worldShader, Shader charShader, Shader waterShader)
+{
+  // 1. Calculate Flashlight Vectors
+  bsp_flashPos = cam->position;
+  Vector3 forward = Vector3Normalize(Vector3Subtract(cam->target, cam->position));
+  bsp_flashDir = forward;
+
+  // 2. Toggle Logic
+  if (IsKeyPressed(KEY_F))
+    bsp_flashEnabled = (bsp_flashEnabled == 1) ? 0 : 1;
+
+  // 3. Helper Lambda to update a specific shader
+  // This saves us from writing the same 7 lines three times
+  auto UpdateShader = [&](Shader s)
+  {
+    if (s.id <= 0)
+      return; // Skip if shader isn't loaded
+
+    SetShaderValue(s, GetShaderLocation(s, "flashPos"), &bsp_flashPos, SHADER_UNIFORM_VEC3);
+    SetShaderValue(s, GetShaderLocation(s, "flashDir"), &bsp_flashDir, SHADER_UNIFORM_VEC3);
+    SetShaderValue(s, GetShaderLocation(s, "flashColor"), &bsp_flashColor, SHADER_UNIFORM_VEC4);
+    SetShaderValue(s, GetShaderLocation(s, "flashIntensity"), &bsp_flashIntensity, SHADER_UNIFORM_FLOAT);
+    SetShaderValue(s, GetShaderLocation(s, "flashRange"), &bsp_flashRange, SHADER_UNIFORM_FLOAT);
+    SetShaderValue(s, GetShaderLocation(s, "flashConeAngle"), &bsp_flashConeAngle, SHADER_UNIFORM_FLOAT);
+    SetShaderValue(s, GetShaderLocation(s, "flashEnabled"), &bsp_flashEnabled, SHADER_UNIFORM_INT);
+  };
+
+  // 4. Execute Updates for all three
+  UpdateShader(worldShader);
+  UpdateShader(charShader);
+  UpdateShader(waterShader);
+
+  // Debug print once
+  static bool locationsChecked = false;
+  if (!locationsChecked)
+  {
+    printf("Flashlight Uniforms pushed to all shaders.\n");
+    locationsChecked = true;
+  }
+}
 
 // -----------------------------------------------------------------------
 // BSP Renderer
@@ -2057,14 +2118,18 @@ Pass this to your game's object factory to create GameObjects.
 */
 struct BSP_BrushEntityData
 {
-  std::string classname;
+  std::string classname = "";
   std::unordered_map<std::string, std::string> tags; // all raw entity key-values
   Vector3 origin = {0, 0, 0};                        // parsed + converted to raylib space
-  Model model = {};                                  // brush geometry (check meshCount > 0)
+  float angle = 0.0f;
+  Model model = {}; // brush geometry (check meshCount > 0)
   bool has_model = false;
   Vector3 collision_box = {0, 0, 0};
   Vector3 collision_offset = {0, 0, 0};
   int clipnode_root = -1;
+  std::string target_name = "";
+  std::string target = "";
+  int spawn_flags = 0;
 
   // Convenience: read a tag or return a default
   std::string GetTag(const std::string &key, const std::string &fallback = "") const
@@ -2092,6 +2157,7 @@ Example:
     }
   }
 */
+
 inline std::vector<BSP_BrushEntityData> BSP_SpawnBrushEntities()
 {
   std::vector<BSP_BrushEntityData> results;
@@ -2102,10 +2168,10 @@ inline std::vector<BSP_BrushEntityData> BSP_SpawnBrushEntities()
 
   for (auto &entity : bsp.entities())
   {
-    // must have a classname
     if (!entity.tags.count("classname"))
       continue;
 
+    std::string classname = entity.tags.at("classname");
     bool is_brush = false;
     std::string model_key;
 
@@ -2114,16 +2180,25 @@ inline std::vector<BSP_BrushEntityData> BSP_SpawnBrushEntities()
       model_key = entity.tags.at("model");
       if (!model_key.empty() && model_key[0] == '*')
         is_brush = true;
-
-      if (!is_brush)
-        continue;
     }
 
+    if (!is_brush)
+      continue;
+
     BSP_BrushEntityData data;
-    data.classname = entity.tags.at("classname");
+    data.classname = classname;
     data.tags = entity.tags;
 
-    // parse origin ("x y z" in Quake space) → raylib space
+    int model_idx = std::stoi(model_key.substr(1));
+    BSP_Model submodel = bsp.model(model_idx);
+
+    // Position Calculation
+    Vector3 quake_center = Vector3Scale(
+        Vector3Add({submodel.bound.min.x, submodel.bound.min.y, submodel.bound.min.z},
+                   {submodel.bound.max.x, submodel.bound.max.y, submodel.bound.max.z}),
+        0.5f);
+    data.origin = FromQuake(quake_center);
+
     if (entity.tags.count("origin"))
     {
       float qx = 0, qy = 0, qz = 0;
@@ -2131,65 +2206,233 @@ inline std::vector<BSP_BrushEntityData> BSP_SpawnBrushEntities()
       data.origin = FromQuake({qx, qy, qz});
     }
 
-    // must reference a brush submodel ("*1", "*2", etc.)
-    if (!entity.tags.count("model"))
-    {
-      continue;
-    }
+    // --- MULTI-TEXTURE FIX START ---
 
-    int model_idx = 0;
-    try
-    {
-      model_idx = std::stoi(model_key.substr(1));
-    }
-    catch (...)
-    {
-      continue;
-    }
-
-    // collect faces for this submodel
-    BSP_Model submodel = bsp.model(model_idx);
-    std::vector<Face> faces;
-    faces.reserve(submodel.face_num);
+    // 1. Group all faces in this submodel by their texture name
+    std::map<std::string, std::vector<Face>> textured_face_groups;
     for (int f = 0; f < submodel.face_num; f++)
-      faces.push_back(bsp.face(submodel.face_id + f));
-
-    if (!faces.empty())
     {
-      Mesh mesh = GenMeshFaces(bsp, faces);
-      data.model = LoadModelFromMesh(mesh);
-
-      // assign shader — triggers are invisible, everything else uses default
-      bool is_trigger = data.classname.starts_with("trigger");
-      // data.model.materials[0].shader = is_trigger ? invisible_shader : default_shader;
-      // data.model.materials[0].shader = debug_shader;
-
-      // assign texture from the first face (best-effort; submodels can have mixed textures)
-      TexInfo ti = bsp.texinfo(faces[0].texinfo_id);
+      Face face = bsp.face(submodel.face_id + f);
+      TexInfo ti = bsp.texinfo(face.texinfo_id);
       Miptex mx = bsp.miptex(ti.miptex_id);
-      auto tex_it = bsp_renderer.textures.find(std::string(mx.name));
-      if (tex_it != bsp_renderer.textures.end())
-        data.model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = tex_it->second;
-
-      // compute bounding box data (vertices are in world-space raylib coords)
-      BoundingBox bb = GetModelBoundingBox(data.model);
-      data.collision_box = Vector3Subtract(bb.max, bb.min);
-      Vector3 bb_center = Vector3Scale(Vector3Add(bb.min, bb.max), 0.5f);
-      data.collision_offset = Vector3Subtract(bb_center, data.origin);
-
-      // register solid (non-trigger) entities with the collider so MoveAndSlide blocks on them.
-      // use clipnode1_id — the BSP hull already pre-expanded for the player size, same as the world hull.
-      if (!is_trigger)
-        data.clipnode_root = submodel.clipnode1_id;
-
-      data.has_model = true;
+      textured_face_groups[std::string(mx.name)].push_back(face);
     }
+
+    if (!textured_face_groups.empty())
+    {
+      int group_count = (int)textured_face_groups.size();
+
+      // Manually initialize the Raylib Model structure
+      data.model = {0};
+      data.model.transform = MatrixIdentity();
+      data.model.meshCount = group_count;
+      data.model.materialCount = group_count;
+
+      // Allocate memory for meshes and materials
+      data.model.meshes = (Mesh *)RL_MALLOC(group_count * sizeof(Mesh));
+      data.model.materials = (Material *)RL_MALLOC(group_count * sizeof(Material));
+      data.model.meshMaterial = (int *)RL_MALLOC(group_count * sizeof(int));
+
+      int i = 0;
+      for (auto const &[tex_name, group_faces] : textured_face_groups)
+      {
+        // Generate mesh for this specific texture group
+        data.model.meshes[i] = GenMeshFaces(bsp, group_faces);
+
+        // Set up material for this mesh
+        data.model.materials[i] = LoadMaterialDefault();
+        data.model.meshMaterial[i] = i; // Link mesh i to material i
+
+        // Assign texture
+        auto tex_it = bsp_renderer.textures.find(tex_name);
+        if (tex_it != bsp_renderer.textures.end())
+        {
+          data.model.materials[i].maps[MATERIAL_MAP_DIFFUSE].texture = tex_it->second;
+        }
+
+        data.model.materials[i].shader = default_shader;
+
+        // Upload the mesh to the GPU immediately
+        UploadMesh(&data.model.meshes[i], false);
+        i++;
+      }
+
+      // Compute world-space bounding box across all meshes
+      BoundingBox bb = GetModelBoundingBox(data.model);
+
+      if (isnan(bb.min.x) || isinf(bb.min.x) || fabsf(bb.min.x) > 100000.0f)
+      {
+        printf("  ERROR: Invalid bounds for entity %s\n", classname.c_str());
+        data.has_model = false;
+      }
+      else
+      {
+        data.collision_box = Vector3Subtract(bb.max, bb.min);
+        Vector3 bb_center = Vector3Scale(Vector3Add(bb.min, bb.max), 0.5f);
+        data.collision_offset = Vector3Subtract(bb_center, data.origin);
+        data.has_model = true;
+      }
+
+      // Solid logic
+      if (!data.classname.starts_with("trigger"))
+        data.clipnode_root = submodel.clipnode1_id;
+    }
+    else
+    {
+      data.has_model = false;
+    }
+    // --- MULTI-TEXTURE FIX END ---
 
     results.push_back(std::move(data));
   }
 
   return results;
-}
+};
+
+// inline std::vector<BSP_BrushEntityData> BSP_SpawnBrushEntities()
+// {
+//   std::vector<BSP_BrushEntityData> results;
+//   if (!bsp_renderer.bsp_file)
+//     return results;
+
+//   BSP_File &bsp = *bsp_renderer.bsp_file;
+
+//   for (auto &entity : bsp.entities())
+//   {
+//     // must have a classname
+//     if (!entity.tags.count("classname"))
+//       continue;
+
+//     std::string classname = entity.tags.at("classname");
+
+//     bool is_brush = false;
+//     std::string model_key;
+
+//     if (entity.tags.count("model"))
+//     {
+//       model_key = entity.tags.at("model");
+//       if (!model_key.empty() && model_key[0] == '*')
+//         is_brush = true;
+//     }
+
+//     if (!is_brush)
+//       continue;
+
+//     BSP_BrushEntityData data;
+//     data.classname = classname;
+//     data.tags = entity.tags;
+
+//     // must reference a brush submodel ("*1", "*2", etc.)
+//     if (!entity.tags.count("model"))
+//       continue;
+
+//     int model_idx = 0;
+//     try
+//     {
+//       model_idx = std::stoi(model_key.substr(1));
+//     }
+//     catch (...)
+//     {
+//       continue;
+//     }
+
+//     // Get submodel from models lump
+//     BSP_Model submodel = bsp.model(model_idx);
+
+//     printf("ENTITY: %s | model=*%d\n", classname.c_str(), model_idx);
+//     printf("  Submodel bound.min (Quake): (%.2f, %.2f, %.2f)\n",
+//            submodel.bound.min.x, submodel.bound.min.y, submodel.bound.min.z);
+//     printf("  Submodel bound.max (Quake): (%.2f, %.2f, %.2f)\n",
+//            submodel.bound.max.x, submodel.bound.max.y, submodel.bound.max.z);
+
+//     // Calculate center in Quake space from bounding box
+//     Vector3 quake_center = Vector3Scale(
+//         Vector3Add({submodel.bound.min.x, submodel.bound.min.y, submodel.bound.min.z},
+//                    {submodel.bound.max.x, submodel.bound.max.y, submodel.bound.max.z}),
+//         0.5f);
+
+//     printf("  Submodel center (Quake): (%.2f, %.2f, %.2f)\n",
+//            quake_center.x, quake_center.y, quake_center.z);
+
+//     // Convert to Raylib space - THIS IS THE ENTITY POSITION
+//     data.origin = FromQuake(quake_center);
+
+//     printf("  Position (Raylib): (%.2f, %.2f, %.2f)\n",
+//            data.origin.x, data.origin.y, data.origin.z);
+
+//     // Optional: Some maps have "origin" key that overrides submodel position
+//     if (entity.tags.count("origin"))
+//     {
+//       float qx = 0, qy = 0, qz = 0;
+//       sscanf(entity.tags.at("origin").c_str(), "%f %f %f", &qx, &qy, &qz);
+//       Vector3 override = FromQuake({qx, qy, qz});
+//       printf("  Origin key override: (%.2f, %.2f, %.2f)\n",
+//              override.x, override.y, override.z);
+//       data.origin = override;
+//     }
+
+//     // Collect faces for this submodel
+//     std::vector<Face> faces;
+//     faces.reserve(submodel.face_num);
+//     for (int f = 0; f < submodel.face_num; f++)
+//       faces.push_back(bsp.face(submodel.face_id + f));
+
+//     if (!faces.empty())
+//     {
+//       printf("  Loading submodel %d with %zu faces...\n", model_idx, faces.size());
+
+//       Mesh mesh = GenMeshFaces(bsp, faces);
+
+//       printf("  Mesh: vertices=%d, triangles=%d\n", mesh.vertexCount, mesh.triangleCount);
+
+//       data.model = LoadModelFromMesh(mesh);
+
+//       // Assign shader — triggers are invisible, everything else uses default
+//       bool is_trigger = data.classname.starts_with("trigger");
+
+//       // Assign texture from the first face
+//       TexInfo ti = bsp.texinfo(faces[0].texinfo_id);
+//       Miptex mx = bsp.miptex(ti.miptex_id);
+//       auto tex_it = bsp_renderer.textures.find(std::string(mx.name));
+//       if (tex_it != bsp_renderer.textures.end())
+//         data.model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = tex_it->second;
+
+//       // Compute bounding box (vertices should be in Raylib world-space after GenMeshFaces)
+//       BoundingBox bb = GetModelBoundingBox(data.model);
+//       printf("  Model bounds (Raylib): (%.2f, %.2f, %.2f) to (%.2f, %.2f, %.2f)\n",
+//              bb.min.x, bb.min.y, bb.min.z, bb.max.x, bb.max.y, bb.max.z);
+
+//       // Check for invalid bounds (garbage memory)
+//       if (isnan(bb.min.x) || isinf(bb.min.x) || fabsf(bb.min.x) > 100000.0f ||
+//           isnan(bb.max.x) || isinf(bb.max.x) || fabsf(bb.max.x) > 100000.0f)
+//       {
+//         printf("  ERROR: Invalid bounds! Model data corrupted.\n");
+//         data.has_model = false;
+//       }
+//       else
+//       {
+//         data.collision_box = Vector3Subtract(bb.max, bb.min);
+//         Vector3 bb_center = Vector3Scale(Vector3Add(bb.min, bb.max), 0.5f);
+//         data.collision_offset = Vector3Subtract(bb_center, data.origin);
+//         data.has_model = true;
+//       }
+
+//       // Register solid (non-trigger) entities with the collider
+//       if (!is_trigger)
+//         data.clipnode_root = submodel.clipnode1_id;
+//     }
+//     else
+//     {
+//       printf("  WARNING: No faces found for submodel %d\n", model_idx);
+//       data.has_model = false;
+//     }
+
+//     results.push_back(std::move(data));
+//   }
+
+//   printf("BSP_SpawnBrushEntities: Spawned %zu brush entities\n", results.size());
+//   return results;
+// }
 
 /*
 BSP_Draw

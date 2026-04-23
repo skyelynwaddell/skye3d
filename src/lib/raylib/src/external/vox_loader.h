@@ -123,6 +123,7 @@ typedef struct {
 
     // Arrays for mesh build
     ArrayVector3 vertices;
+	ArrayVector3 normals;
     ArrayUShort indices;
     ArrayColor colors;
 
@@ -150,7 +151,7 @@ void Vox_FreeArrays(VoxArray3D* voxarray);
 /////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////
 //									Implementation
-///////////////////////////////////////////////////////////////////////////////////////////// 
+/////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////
 
 #ifdef VOX_LOADER_IMPLEMENTATION
@@ -164,7 +165,7 @@ void Vox_FreeArrays(VoxArray3D* voxarray);
 
 static void initArrayUShort(ArrayUShort* a, int initialSize)
 {
-	a->array = VOX_MALLOC(initialSize * sizeof(unsigned short));
+	a->array = (unsigned short *)VOX_MALLOC(initialSize * sizeof(unsigned short));
 	a->used = 0;
 	a->size = initialSize;
 }
@@ -174,7 +175,7 @@ static void insertArrayUShort(ArrayUShort* a, unsigned short element)
 	if (a->used == a->size)
 	{
 		a->size *= 2;
-		a->array = VOX_REALLOC(a->array, a->size * sizeof(unsigned short));
+		a->array = (unsigned short *)VOX_REALLOC(a->array, a->size * sizeof(unsigned short));
 	}
 	a->array[a->used++] = element;
 }
@@ -193,7 +194,7 @@ static void freeArrayUShort(ArrayUShort* a)
 
 static void initArrayVector3(ArrayVector3* a, int initialSize)
 {
-	a->array = VOX_MALLOC(initialSize * sizeof(VoxVector3));
+	a->array = (VoxVector3 *)VOX_MALLOC(initialSize * sizeof(VoxVector3));
 	a->used = 0;
 	a->size = initialSize;
 }
@@ -203,7 +204,7 @@ static void insertArrayVector3(ArrayVector3* a, VoxVector3 element)
 	if (a->used == a->size)
 	{
 		a->size *= 2;
-		a->array = VOX_REALLOC(a->array, a->size * sizeof(VoxVector3));
+		a->array = (VoxVector3 *)VOX_REALLOC(a->array, a->size * sizeof(VoxVector3));
 	}
 	a->array[a->used++] = element;
 }
@@ -221,7 +222,7 @@ static void freeArrayVector3(ArrayVector3* a)
 
 static void initArrayColor(ArrayColor* a, int initialSize)
 {
-	a->array = VOX_MALLOC(initialSize * sizeof(VoxColor));
+	a->array = (VoxColor *)VOX_MALLOC(initialSize * sizeof(VoxColor));
 	a->used = 0;
 	a->size = initialSize;
 }
@@ -231,7 +232,7 @@ static void insertArrayColor(ArrayColor* a, VoxColor element)
 	if (a->used == a->size)
 	{
 		a->size *= 2;
-		a->array = VOX_REALLOC(a->array, a->size * sizeof(VoxColor));
+		a->array = (VoxColor *)VOX_REALLOC(a->array, a->size * sizeof(VoxColor));
 	}
 	a->array[a->used++] = element;
 }
@@ -292,6 +293,16 @@ const VoxVector3 SolidVertex[] = {
 	{1, 1, 1}    //7
  };
 
+const VoxVector3 FacesPerSideNormal[] = {
+	{ -1, 0, 0 }, //-X
+	{1, 0, 0 },   //+X
+	{0,-1, 0},    //-Y
+	{0, 1, 0},    //+Y
+	{0, 0, -1},   //-Z
+	{0, 0,  1},  //+Z
+};
+
+
 // Allocated VoxArray3D size
 static void Vox_AllocArray(VoxArray3D* pvoxarray, int _sx, int _sy, int _sz)
 {
@@ -316,7 +327,7 @@ static void Vox_AllocArray(VoxArray3D* pvoxarray, int _sx, int _sy, int _sz)
 
 	// Alloc chunks array
 	int size = sizeof(CubeChunk3D) * chx * chy * chz;
-	pvoxarray->m_arrayChunks = VOX_MALLOC(size);
+	pvoxarray->m_arrayChunks = (CubeChunk3D *)VOX_MALLOC(size);
 	pvoxarray->arrayChunksSize = size;
 
 	// Init chunks array
@@ -355,7 +366,7 @@ static void Vox_SetVoxel(VoxArray3D* pvoxarray, int x, int y, int z, unsigned ch
 	if (chunk->m_array == 0)
 	{
 		int size = CHUNKSIZE * CHUNKSIZE * CHUNKSIZE;
-		chunk->m_array = VOX_MALLOC(size);
+		chunk->m_array = (unsigned char *)VOX_MALLOC(size);
 		chunk->arraySize = size;
 		memset(chunk->m_array, 0, size);
 
@@ -508,6 +519,11 @@ static void Vox_Build_Voxel(VoxArray3D* pvoxArray, int x, int y, int z, int matI
 		insertArrayVector3(&pvoxArray->vertices, vertComputed[v2]);
 		insertArrayVector3(&pvoxArray->vertices, vertComputed[v3]);
 
+		insertArrayVector3(&pvoxArray->normals, FacesPerSideNormal[i]);
+		insertArrayVector3(&pvoxArray->normals, FacesPerSideNormal[i]);
+		insertArrayVector3(&pvoxArray->normals, FacesPerSideNormal[i]);
+		insertArrayVector3(&pvoxArray->normals, FacesPerSideNormal[i]);
+
 		VoxColor col = pvoxArray->palette[matID];
 
 		insertArrayColor(&pvoxArray->colors, col);
@@ -653,6 +669,7 @@ int Vox_LoadFromMemory(unsigned char* pvoxData, unsigned int voxDataSize, VoxArr
 
 	// Init Arrays
 	initArrayVector3(&pvoxarray->vertices, 3 * 1024);
+	initArrayVector3(&pvoxarray->normals, 3 * 1024);
 	initArrayUShort(&pvoxarray->indices, 3 * 1024);
 	initArrayColor(&pvoxarray->colors, 3 * 1024);
 

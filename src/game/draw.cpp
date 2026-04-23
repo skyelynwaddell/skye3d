@@ -15,20 +15,27 @@ void Draw()
 
   luaDraw(GetFrameTime());
 
+  BeginDrawing();
+  ClearBackground(BLACK);
+
   static bool enable_wireframe = false;
   if (SCREEN_WIDTH != lastscreenw || SCREEN_HEIGHT != lastscreenh)
   {
     PostProcess_DestroyFBOs();
-    PostProcess_CreateFBOs(SCREEN_WIDTH, SCREEN_HEIGHT);
+    PostProcess_CreateFBOs(RENDER_WIDTH, RENDER_HEIGHT);
     lastscreenw = SCREEN_WIDTH;
     lastscreenh = SCREEN_HEIGHT;
   }
+
+  BSP_UpdateFlashlight(camera.get(), default_shader, characterShader, liquid_shader);
 
   // ── Pass 1 Render scene ──────────────────────────
   BeginTextureMode(pp_scene_fbo);
   ClearBackground(GRAY);
   BeginMode3D(*camera);
   BSP_Draw(shader, enable_wireframe, camera->position);
+
+  CharacterShader_Update();
   GameObject3D_DrawAll();
 
   EndMode3D();
@@ -92,7 +99,6 @@ void Draw()
   EndTextureMode();
 
   // Pass 7 - Combined Render Texture Aspect Ratio Scaled
-  BeginDrawing();
   ClearBackground(BLACK);
 
   BeginShaderMode(pp_composite);
@@ -100,17 +106,17 @@ void Draw()
   rlEnableTexture(pp_bloom_fbo_a.texture.id);
 
   // Calculate scaling to fit the FBO into the current window
-  float scale = fminf((float)GetScreenWidth() / SCREEN_WIDTH,
-                      (float)GetScreenHeight() / SCREEN_HEIGHT);
+  float scale = fminf((float)GetScreenWidth() / RENDER_WIDTH,
+                      (float)GetScreenHeight() / RENDER_HEIGHT);
 
-  float destw = SCREEN_WIDTH * scale;
-  float desth = SCREEN_HEIGHT * scale;
+  float destw = RENDER_WIDTH * scale;
+  float desth = RENDER_HEIGHT * scale;
   float destx = (GetScreenWidth() - destw) / 2.0f;
   float desty = (GetScreenHeight() - desth) / 2.0f;
 
   // Draw the scene FBO scaled and centered
   DrawTexturePro(pp_scene_fbo.texture,
-                 {0, 0, (float)SCREEN_WIDTH, (float)-SCREEN_HEIGHT},
+                 {0, 0, (float)RENDER_WIDTH, (float)-RENDER_HEIGHT},
                  {destx, desty, destw, desth},
                  {0, 0}, 0.0f, WHITE);
 
@@ -132,35 +138,4 @@ void Draw()
   GameObject3D_DrawAllDebug();
   EndShaderMode();
   EndMode3D();
-
-  // if (enable_imgui)
-  // {
-  // 	rlImGuiBegin();
-  // 	ImGuiWindowFlags overlayFlags = ImGui::SetNextWindowOverlay();
-  // 	if (ImGui::Begin("Controls", nullptr, overlayFlags))
-  // 	{
-  // 		ImGui::Text("Drag and Drop a .BSP file onto the window to view it.");
-  // 		ImGui::Text("Current File: %s", currentFile.c_str());
-  // 		ImGui::Separator();
-
-  // 		ImGui::BulletText("WASD:        Move");
-  // 		ImGui::BulletText("SPACE/LCTRL: Up/Down");
-  // 		ImGui::BulletText("Q/E:         Roll");
-  // 		ImGui::BulletText("R:           Reset Camera Roll");
-  // 		ImGui::BulletText("Mouse:       Pan");
-  // 		ImGui::BulletText("I:           Toggle UI");
-  // 		ImGui::BulletText("RMB:         Toggle Cursor");
-
-  // 		if (ImGui::SliderInt("Light Power", &lightPower, 1, 50))
-  // 			SetShaderValue(shader, GetShaderLocation(shader, "lightPower"), &lightPower, SHADER_UNIFORM_INT);
-
-  // 		ImGui::Checkbox("Wireframe", &enable_wireframe);
-
-  // 		static float line_width = rlGetLineWidth();
-  // 		if (ImGui::SliderFloat("Line Width", &line_width, 0.1f, 10))
-  // 			rlSetLineWidth(line_width);
-  // 	}
-  // 	ImGui::End();
-  // 	rlImGuiEnd();
-  // }
 };

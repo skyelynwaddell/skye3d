@@ -2,9 +2,10 @@
 inline int LIGHT_COUNT = 4;
 inline int my_local_player_id = -1;
 
-inline int SCREEN_WIDTH = 1280;
-inline int SCREEN_HEIGHT = 720;
-
+inline int SCREEN_WIDTH = 1920;
+inline int SCREEN_HEIGHT = 1080;
+inline int RENDER_WIDTH = 1920;
+inline int RENDER_HEIGHT = 1080;
 
 void Init();
 void Update();

@@ -18,57 +18,67 @@ function get_player_instance(client_id) -- returns player intance by client id
 function get_instance_count() -- get total amount of gameobjects spawned
 
 -- Object methods
-obj = {}
-
 function obj:destroy()
 function obj:get(var)
 function obj:set(var, value)
-```
 
-```lua
--- Transformation & physics
+function obj:set_think(think_func) -- sets objects think/update func
+function obj:set_trigger(trigger_func) -- sets objects trigger func
+function obj:on_trigger() -- triggers an objects 'on_trigger' func
+
 function obj:get_position() -- returns {x=0,y=0,z=0}
-function obj:set_position(x,y,z)
+function obj:set_position(x,y,z) -- sets the world position of the object
 
 function obj:get_velocity() -- returns {x=0,y=0,z=0}
-function obj:set_velocity(x,y,z) end
+function obj:set_velocity(x,y,z) -- set how fast we are currently moving
 
-function obj:get_acceleration() -- returns {x=0,y=0,z=0}
-function obj:set_acceleration(x,y,z)
+function obj:get_acceleration() -- returns float of our acceleration speed
+function obj:set_acceleration(x,y,z) -- set how fast we accelerate from standing still
 
-function obj:get_speed()
-function obj:set_speed(speed)
+function obj:get_speed() -- returns object target speed
+function obj:set_speed(speed) -- set object target speed
 
-function obj:get_size() -- returns {x=0,y=0,z=0}
-function obj:set_size(x,y,z)
-```
+function obj:get_size() -- returns {collision_box{xyz}, offset{xyz}}
+function obj:set_size({x,y,z}, {x,y,z}) -- collisionbox, and collision_offset - set collision box box size
 
-```lua
--- Collision
 function obj:get_collision_box() -- returns {width=0,height=0,length=0}
-function obj:set_collision_box(w,h,l)
+function obj:set_collision_box(w,h,l) -- set collision size
+
+function obj:get_target_name() -- gets our targetname
+function obj:set_target_name(name) -- set our targetname
+
+function obj:get_target()   -- gets who we are targeting
+function obj:set_target(name)   -- sets who we should target
+
+function obj:set_model(model_path) -- set model by filepath, client must also have file in same dir
+function obj:set_model_scale(w, h, l) -- set model scale (default 1,1,1)
+
+function obj:set_angle(angle) -- set the Y rotation angle of a object
+
+function find_closest_object(max_dist)  -- returns single closest object in range to caller
+function find_all_objects_in_range(max_dist) -- returns an array of all objects in range to caller
+function get_aabb() -- returns BoundingBox {Vector3 min, Vector3 max}
 ```
 
 ```lua
--- Targeting & identification
-function obj:get_target_name()
-function obj:set_target_name(name)
-
-function obj:get_target()
-function obj:set_target(name)
-```
-
-```lua
--- Example: Think function
-function player_think(self, dt)
-    print("name: " .. tostring(self:get("name")))
-    print("health: " .. tostring(self:get("health")))
-    print("mana: " .. tostring(self:get("mana")))
-    print("eliminated: " .. tostring(self:get("eliminated")))
+-- think/update/step event (called every frame)
+function door_think(self, dt)
+    print("think func! :)");
 end
 
-function info_player_start(self, origin, tags)
-    self:set_think(player_think)
+-- on_trigger function
+-- what happens when something calles on_trigger on us
+function door_trigger(self)
+    print("i've been triggered")
+end
+
+-- when the map loads, and an entity with a classname is found,
+-- it will automatically call the function with the same classname as the entity.
+-- with the self,origin, and tags the entity has ie. door(self, origin, tags)
+-- it will be called for each entity with that classname
+function door(self, origin, tags)
+    self:set_think(player_think)        -- step/update/think event
+    self:set_trigger(player_trigger)    -- what happens when this object is triggered
 end
 ```
 
@@ -110,7 +120,7 @@ end
 
 ```lua
 -- Networking
-function connect_to_server() end
+function connect_to_server()
 ```
 
 ```lua
@@ -185,7 +195,6 @@ function is_cursor_on_screen()
 ```lua
 -- System
 function get_camera_position() -- returns {x=0,y=0,z=0}
-end
 ```
 
 ```lua

@@ -122,6 +122,7 @@ extern "C" {
 
 struct sinfl {
   const unsigned char *bitptr;
+  const unsigned char *bitend;      // @raysan5: added
   unsigned long long bitbuf;
   int bitcnt;
 
@@ -170,10 +171,11 @@ extern int zsinflate(void *out, int cap, const void *in, int size);
 
 static int
 sinfl_bsr(unsigned n) {
-#ifdef _MSC_VER
-  _BitScanReverse(&n, n);
-  return n;
-#elif defined(__GNUC__) || defined(__clang__)
+#if defined(_MSC_VER) && !defined(__llvm__) && !defined(__INTEL_COMPILER)   // @raysan5, address PR #5367
+  unsigned long uln = 0;
+  _BitScanReverse(&uln, n);
+  return (int)(uln);
+#else // defined(__GNUC__) || defined(__clang__) || defined(__TINYC__)
   return 31 - __builtin_clz(n);
 #endif
 }
@@ -185,9 +187,10 @@ sinfl_read64(const void *p) {
 }
 static void
 sinfl_copy64(unsigned char **dst, unsigned char **src) {
-  unsigned long long n;
-  memcpy(&n, *src, 8);
-  memcpy(*dst, &n, 8);
+  //unsigned long long n;
+  //memcpy(&n, *src, 8);
+  //memcpy(*dst, &n, 8);
+  memcpy(*dst, *src, 8);    // @raysan5
   *dst += 8, *src += 8;
 }
 static unsigned char*
@@ -210,19 +213,32 @@ sinfl_copy128(unsigned char **dst, unsigned char **src) {
 #endif
 static void
 sinfl_refill(struct sinfl *s) {
-  s->bitbuf |= sinfl_read64(s->bitptr) << s->bitcnt;
-  s->bitptr += (63 - s->bitcnt) >> 3;
-  s->bitcnt |= 56; /* bitcount in range [56,63] */
+  if (s->bitend - s->bitptr >= 8) {
+      // @raysan5: original code, only those 3 lines
+      s->bitbuf |= sinfl_read64(s->bitptr) << s->bitcnt;
+      s->bitptr += (63 - s->bitcnt) >> 3;
+      s->bitcnt |= 56; /* bitcount in range [56,63] */
+  } else {
+      // @raysan5: added this case when bits remaining < 8
+      int bitswant = 63 - s->bitcnt;
+      int byteswant = bitswant >> 3;
+      int bytesuse = s->bitend - s->bitptr <= byteswant ? (int)(s->bitend - s->bitptr) : byteswant;
+      unsigned long long n = 0;
+      memcpy(&n, s->bitptr, bytesuse);
+      s->bitbuf |= n << s->bitcnt;
+      s->bitptr += bytesuse;
+      s->bitcnt += bytesuse << 3;
+  }
 }
 static int
 sinfl_peek(struct sinfl *s, int cnt) {
-  assert(cnt >= 0 && cnt <= 56);
-  assert(cnt <= s->bitcnt);
+  //assert(cnt >= 0 && cnt <= 56);          // @raysan5: commented to avoid crash on decompression
+  //assert(cnt <= s->bitcnt);
   return s->bitbuf & ((1ull << cnt) - 1);
 }
 static void
 sinfl_eat(struct sinfl *s, int cnt) {
-  assert(cnt <= s->bitcnt);
+  //assert(cnt <= s->bitcnt);               // @raysan5: commented
   s->bitbuf >>= cnt;
   s->bitcnt -= cnt;
 }
@@ -384,6 +400,7 @@ sinfl_decompress(unsigned char *out, int cap, const unsigned char *in, int size)
   int last = 0;
 
   s.bitptr = in;
+  s.bitend = e;     // @raysan5: added
   while (1) {
     switch (state) {
     case hdr: {

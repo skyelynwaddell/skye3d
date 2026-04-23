@@ -29,20 +29,17 @@ packet_funcs = {
         return
       end
 
-      local interact_dist = 100
-      local obj = player:find_closest_object(interact_dist)
+      local interact_dist = 4
+      local objs = player:find_all_objects_in_range(interact_dist)
 
-      if obj then
-        local name = obj:get_classname()
-        local obj_pos = obj:get_position()
-        print("found object " .. tostring(obj) .. " " .. name .. " \n")
-        print("  Player position: " .. tostring(player:get_position()) .. "\n")
-        print("  Object position: " .. tostring(obj_pos) .. "\n")
-        if obj:get_classname() == "func_door" then
-          obj:on_trigger()
+      if objs and #objs > 0 then
+        for i, obj in ipairs(objs) do
+          local name = obj:get_classname()
+          if name == "func_door" then
+            obj:on_trigger()
+          end
         end
-      else
-        print("interact pressed, no obj found within dist " .. interact_dist .. "\n")
+        --
       end
     end
   end,

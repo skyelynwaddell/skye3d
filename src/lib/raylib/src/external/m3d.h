@@ -89,7 +89,7 @@ typedef uint8_t M3D_VOXEL;
 #define M3D_NUMBONE 4
 #endif
 #ifndef M3D_BONEMAXLEVEL
-#define M3D_BONEMAXLEVEL 8
+#define M3D_BONEMAXLEVEL 64
 #endif
 #ifndef _MSC_VER
 #ifndef _inline
@@ -236,7 +236,8 @@ typedef struct {
 #ifdef M3D_ASCII
 #define M3D_PROPERTYDEF(f,i,n) { (f), (i), (char*)(n) }
     char *key;
-#else
+#endif
+#ifndef M3D_ASCII
 #define M3D_PROPERTYDEF(f,i,n) { (f), (i) }
 #endif
 } m3dpd_t;
@@ -414,7 +415,8 @@ typedef struct {
 #ifdef M3D_ASCII
 #define M3D_CMDDEF(t,n,p,a,b,c,d,e,f,g,h) { (char*)(n), (p), { (a), (b), (c), (d), (e), (f), (g), (h) } }
     char *key;
-#else
+#endif
+#ifndef M3D_ASCII
 #define M3D_CMDDEF(t,n,p,a,b,c,d,e,f,g,h) { (p), { (a), (b), (c), (d), (e), (f), (g), (h) } }
 #endif
     uint8_t p;
@@ -674,6 +676,10 @@ static m3dcd_t m3d_commandtypes[] = {
 #include <stdlib.h>
 #include <string.h>
 
+/* we'll need this with M3D_NOTEXTURE */
+char *stbi_zlib_decode_malloc_guesssize_headerflag(const char *buffer, int len, int initial_size, int *outlen, int parse_header);
+
+#ifndef M3D_NOTEXTURE
 #if !defined(M3D_NOIMPORTER) && !defined(STBI_INCLUDE_STB_IMAGE_H)
 /* PNG decompressor from
 
@@ -1868,6 +1874,11 @@ static void *_m3dstbi__png_load(_m3dstbi__context *s, int *x, int *y, int *comp,
 #if !defined(M3D_NOIMPORTER) && defined(STBI_INCLUDE_STB_IMAGE_H) && !defined(STB_IMAGE_IMPLEMENTATION)
 #error "stb_image.h included without STB_IMAGE_IMPLEMENTATION. Sorry, we need some stuff defined inside the ifguard for proper integration"
 #endif
+#else
+#if !defined(STBI_INCLUDE_STB_IMAGE_H) || defined(STBI_NO_ZLIB)
+#error "stb_image.h not included or STBI_NO_ZLIB defined. Sorry, we need its zlib implementation for proper integration"
+#endif
+#endif /* M3D_NOTEXTURE */
 
 #if defined(M3D_EXPORTER) && !defined(INCLUDE_STB_IMAGE_WRITE_H)
 /* zlib_compressor from
@@ -2168,10 +2179,14 @@ M3D_INDEX _m3d_gettx(m3d_t *model, m3dread_t readfilecb, m3dfree_t freecb, char 
     unsigned int i, len = 0;
     unsigned char *buff = NULL;
     char *fn2;
+#ifndef M3D_NOTEXTURE
     unsigned int w, h;
     stbi__context s;
     stbi__result_info ri;
+#endif
 
+    /* failsafe */
+    if(!fn || !*fn) return M3D_UNDEF;
     /* do we have loaded this texture already? */
     for(i = 0; i < model->numtexture; i++)
         if(!strcmp(fn, model->texture[i].name)) return i;
@@ -2207,13 +2222,17 @@ M3D_INDEX _m3d_gettx(m3d_t *model, m3dread_t readfilecb, m3dfree_t freecb, char 
     if(!model->texture) {
         if(buff && freecb) (*freecb)(buff);
         model->errcode = M3D_ERR_ALLOC;
+        model->numtexture = 0;
         return M3D_UNDEF;
     }
+    memset(&model->texture[i], 0, sizeof(m3dtx_t));
     model->texture[i].name = fn;
-    model->texture[i].w = model->texture[i].h = 0; model->texture[i].d = NULL;
     if(buff) {
         if(buff[0] == 0x89 && buff[1] == 'P' && buff[2] == 'N' && buff[3] == 'G') {
-            s.read_from_callbacks = 0;
+#ifndef M3D_NOTEXTURE
+            /* return pixel buffer of the decoded texture */
+            memset(&s, 0, sizeof(s));
+            memset(&ri, 0, sizeof(ri));
             s.img_buffer = s.img_buffer_original = (unsigned char *) buff;
             s.img_buffer_end = s.img_buffer_original_end = (unsigned char *) buff+len;
             /* don't use model->texture[i].w directly, it's a uint16_t */
@@ -2223,6 +2242,16 @@ M3D_INDEX _m3d_gettx(m3d_t *model, m3dread_t readfilecb, m3dfree_t freecb, char 
             model->texture[i].w = w;
             model->texture[i].h = h;
             model->texture[i].f = (uint8_t)len;
+#else
+            /* return only the raw undecoded texture */
+            if((model->texture[i].d = (uint8_t*)M3D_MALLOC(len))) {
+                memcpy(model->texture[i].d, buff, len);
+                model->texture[i].w = len & 0xffff;
+                model->texture[i].h = (len >> 16) & 0xffff;
+                model->texture[i].f = 0;
+            } else
+                model->errcode = M3D_ERR_ALLOC;
+#endif
         } else {
 #ifdef M3D_TX_INTERP
             if((model->errcode = M3D_TX_INTERP(fn, buff, len, &model->texture[i])) != M3D_SUCCESS) {
@@ -2246,9 +2275,9 @@ void _m3d_getpr(m3d_t *model, _unused m3dread_t readfilecb, _unused  m3dfree_t f
 {
 #ifdef M3D_PR_INTERP
     unsigned int i, len = 0;
-    unsigned char *buff = readfilecb ? (*readfilecb)(fn, &len) : NULL;
+    unsigned char *buff = readfilecb && fn && *fn ? (*readfilecb)(fn, &len) : NULL;
 
-    if(!buff && model->inlined) {
+    if(!buff && fn && *fn && model->inlined) {
         for(i = 0; i < model->numinlined; i++)
             if(!strcmp(fn, model->inlined[i].name)) {
                 buff = model->inlined[i].data;
@@ -3439,6 +3468,7 @@ memerr:         M3D_LOG("Out of memory");
                 model->bone[i].numweight = 0;
                 model->bone[i].weight = NULL;
             }
+            if(i != model->numbone) { M3D_LOG("Truncated bone chunk"); model->numbone = i; model->numskin = 0; model->errcode = M3D_ERR_BONE; }
             /* read skin definitions */
             if(model->numskin) {
                 model->skin = (m3ds_t*)M3D_MALLOC(model->numskin * sizeof(m3ds_t));
@@ -3471,6 +3501,7 @@ memerr:         M3D_LOG("Out of memory");
                             model->skin[i].weight[j] /= w;
                     }
                 }
+                if(i != model->numskin) { M3D_LOG("Truncated skin in bone chunk"); model->numskin = i; model->errcode = M3D_ERR_BONE; }
             }
         } else
         /* material */
@@ -4276,7 +4307,7 @@ m3db_t *m3d_pose(m3d_t *model, M3D_INDEX actionid, uint32_t msec)
     if(l != msec) {
         model->vertex = (m3dv_t*)M3D_REALLOC(model->vertex, (model->numvertex + 2 * model->numbone) * sizeof(m3dv_t));
         if(!model->vertex) {
-            free(ret);
+            M3D_FREE(ret);
             model->errcode = M3D_ERR_ALLOC;
             return NULL;
         }
@@ -4488,7 +4519,7 @@ void m3d_free(m3d_t *model)
     if(model->label) M3D_FREE(model->label);
     if(model->inlined) M3D_FREE(model->inlined);
     if(model->extra) M3D_FREE(model->extra);
-    free(model);
+    M3D_FREE(model);
 }
 #endif
 
@@ -4564,15 +4595,15 @@ static uint32_t _m3d_stridx(m3dstr_t *str, uint32_t numstr, char *s)
         safe = _m3d_safestr(s, 0);
         if(!safe) return 0;
         if(!*safe) {
-            free(safe);
+            M3D_FREE(safe);
             return 0;
         }
         for(i = 0; i < numstr; i++)
             if(!strcmp(str[i].str, s)) {
-                free(safe);
+                M3D_FREE(safe);
                 return str[i].offs;
             }
-        free(safe);
+        M3D_FREE(safe);
     }
     return 0;
 }
@@ -4726,14 +4757,14 @@ unsigned char *m3d_save(m3d_t *model, int quality, int flags, unsigned int *size
     unsigned char *out = NULL, *z = NULL, weights[M3D_NUMBONE < 8 ? 8 : M3D_NUMBONE], *norm = NULL;
     unsigned int i, j, k, l, n, o, len, chunklen, *length;
     int maxvox = 0, minvox = 0;
-    M3D_FLOAT scale = (M3D_FLOAT)0.0, min_x, max_x, min_y, max_y, min_z, max_z;
+    M3D_FLOAT scale = (M3D_FLOAT)0.0, min_x, max_x, min_y, max_y, min_z, max_z, mw;
     M3D_INDEX last, *vrtxidx = NULL, *mtrlidx = NULL, *tmapidx = NULL, *skinidx = NULL;
 #ifdef M3D_VERTEXMAX
     M3D_INDEX lastp;
 #endif
     uint32_t idx, numcmap = 0, *cmap = NULL, numvrtx = 0, maxvrtx = 0, numtmap = 0, maxtmap = 0, numproc = 0;
     uint32_t numskin = 0, maxskin = 0, numstr = 0, maxt = 0, maxbone = 0, numgrp = 0, maxgrp = 0, *grpidx = NULL;
-    uint8_t *opa;
+    uint8_t *opa = NULL;
     m3dcd_t *cd;
     m3dc_t *cmd;
     m3dstr_t *str = NULL;
@@ -4885,7 +4916,7 @@ unsigned char *m3d_save(m3d_t *model, int quality, int flags, unsigned int *size
                     if(cmd->type == m3dc_mesh) {
                         if(numgrp + 2 < maxgrp) {
                             maxgrp += 1024;
-                            grpidx = (uint32_t*)realloc(grpidx, maxgrp * sizeof(uint32_t));
+                            grpidx = (uint32_t*)M3D_REALLOC(grpidx, maxgrp * sizeof(uint32_t));
                             if(!grpidx) goto memerr;
                             if(!numgrp) {
                                 grpidx[0] = 0;
@@ -5072,10 +5103,9 @@ unsigned char *m3d_save(m3d_t *model, int quality, int flags, unsigned int *size
         for(i = 0; i < model->numskin; i++) {
             if(skinidx[i] == M3D_UNDEF) continue;
             memset(&sk, 0, sizeof(m3dssave_t));
-            for(j = 0, min_x = (M3D_FLOAT)0.0; j < M3D_NUMBONE && model->skin[i].boneid[j] != M3D_UNDEF &&
-                model->skin[i].weight[j] > (M3D_FLOAT)0.0; j++) {
+            for(j = 0, min_x = (M3D_FLOAT)0.0; j < M3D_NUMBONE && model->skin[i].boneid[j] != M3D_UNDEF; j++) {
                     sk.data.boneid[j] = model->skin[i].boneid[j];
-                    sk.data.weight[j] = model->skin[i].weight[j];
+                    sk.data.weight[j] = model->skin[i].weight[j] > (M3D_FLOAT)0.0 ? model->skin[i].weight[j] : (M3D_FLOAT)0.01;
                     min_x += sk.data.weight[j];
             }
             if(j > maxbone) maxbone = j;
@@ -5191,6 +5221,7 @@ memerr: if(vrtxidx) M3D_FREE(vrtxidx);
         if(sa) M3D_FREE(sa);
         if(sd) M3D_FREE(sd);
         if(out) M3D_FREE(out);
+        if(opa) M3D_FREE(opa);
         if(h) M3D_FREE(h);
         M3D_LOG("Out of memory");
         model->errcode = M3D_ERR_ALLOC;
@@ -5218,8 +5249,16 @@ memerr: if(vrtxidx) M3D_FREE(vrtxidx);
         if(model->preview.data && model->preview.length) {
             sl = _m3d_safestr(sn, 0);
             if(sl) {
+/* gcc thinks that "ptr is used after free", well, gcc is simply wrong. */
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wuse-after-free"
+#endif
                 ptr -= (uintptr_t)out; len = (unsigned int)((uintptr_t)ptr + (uintptr_t)20 + strlen(sl));
                 out = (unsigned char*)M3D_REALLOC(out, len); ptr += (uintptr_t)out;
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
                 if(!out) { setlocale(LC_NUMERIC, ol); goto memerr; }
                 ptr += sprintf(ptr, "Preview\r\n%s.png\r\n\r\n", sl);
                 M3D_FREE(sl); sl = NULL;
@@ -5228,6 +5267,7 @@ memerr: if(vrtxidx) M3D_FREE(vrtxidx);
         M3D_FREE(sn);  sn = NULL;
         /* texture map */
         if(numtmap && tmap && !(flags & M3D_EXP_NOTXTCRD) && !(flags & M3D_EXP_NOFACE)) {
+/* interestingly gcc does not complain about "ptr is used after free" here, although the code is 100% the same */
             ptr -= (uintptr_t)out; len = (unsigned int)((uintptr_t)ptr + (uintptr_t)(maxtmap * 32) + (uintptr_t)12);
             out = (unsigned char*)M3D_REALLOC(out, len); ptr += (uintptr_t)out;
             if(!out) { setlocale(LC_NUMERIC, ol); goto memerr; }
@@ -5846,9 +5886,13 @@ memerr: if(vrtxidx) M3D_FREE(vrtxidx);
                     if(skin[i].newidx == last) continue;
                     last = skin[i].newidx;
                     memset(&weights, 0, nb_s);
-                    for(j = 0; j < (uint32_t)nb_s && skin[i].data.boneid[j] != M3D_UNDEF &&
-                        skin[i].data.weight[j] > (M3D_FLOAT)0.0; j++)
+                    for(j = k = l = 0, mw = 0.0; j < (uint32_t)nb_s && skin[i].data.boneid[j] != M3D_UNDEF &&
+                        skin[i].data.weight[j] > (M3D_FLOAT)0.0; j++) {
+                            if(mw < skin[i].data.weight[j]) { mw = skin[i].data.weight[j]; k = j; }
                             weights[j] = (uint8_t)(skin[i].data.weight[j] * 255);
+                            if(!weights[j]) { weights[j]++; l--; }
+                        }
+                    weights[k] += l;
                     switch(nb_s) {
                         case 1: weights[0] = 255; break;
                         case 2: memcpy(out, weights, 2); out += 2; break;
@@ -5941,7 +5985,7 @@ memerr: if(vrtxidx) M3D_FREE(vrtxidx);
         }
         /* mesh face */
         if(model->numface && face && !(flags & M3D_EXP_NOFACE)) {
-            chunklen = 8 + si_s + model->numface * (6 * vi_s + 3 * ti_s + si_s + 1);
+            chunklen = 8 + si_s + model->numface * (9 * vi_s + 3 * ti_s + si_s + 1);
             h = (m3dhdr_t*)M3D_REALLOC(h, len + chunklen);
             if(!h) goto memerr;
             memcpy((uint8_t*)h + len, "MESH", 4);
@@ -6268,6 +6312,7 @@ memerr: if(vrtxidx) M3D_FREE(vrtxidx);
     if(skin) M3D_FREE(skin);
     if(str) M3D_FREE(str);
     if(vrtx) M3D_FREE(vrtx);
+    if(opa) M3D_FREE(opa);
     if(h) M3D_FREE(h);
     return out;
 }
@@ -6292,7 +6337,7 @@ namespace M3D {
 
         public:
             Model() {
-                this->model = (m3d_t*)malloc(sizeof(m3d_t)); memset(this->model, 0, sizeof(m3d_t));
+                this->model = (m3d_t*)M3D_MALLOC(sizeof(m3d_t)); memset(this->model, 0, sizeof(m3d_t));
             }
             Model(_unused const std::string &data, _unused m3dread_t ReadFileCB,
                 _unused m3dfree_t FreeCB, _unused M3D::Model mtllib) {

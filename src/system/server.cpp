@@ -85,14 +85,14 @@ void enetserver_process_message(ENetEvent *event)
 
   if (sender_id < 0 || sender_id >= MAX_PLAYERS)
   {
-    printf("[SERVER]: Received packet from unknown peer, ignoring.\n");
+    // printf("[SERVER]: Received packet from unknown peer, ignoring.\n");
     return;
   }
 
   // Validate packet size
   if (packet->dataLength < 1)
   {
-    printf("[SERVER]: Received empty packet.\n");
+    // printf("[SERVER]: Received empty packet.\n");
     return;
   }
 
@@ -130,7 +130,6 @@ void enetserver_process_message(ENetEvent *event)
     auto it = float_handlers.find(name);
     if (it != float_handlers.end())
     {
-      printf("[SERVER]: Handling float packet '%s' from player %d\n", name.c_str(), sender_id);
       it->second(sender_id, payload, payload_len);
     }
     else
@@ -165,7 +164,7 @@ void enetserver_process_message(ENetEvent *event)
   }
 
   default:
-    printf("[SERVER]: Unknown message type: %d from player %d\n", message_type, sender_id);
+    // printf("[SERVER]: Unknown message type: %d from player %d\n", message_type, sender_id);
     break;
   }
 };
@@ -191,43 +190,147 @@ static void enetserver_sync_entities()
   if (!server_online)
     return;
 
+  // Check if a new client joined since the last tick
+  bool force_full_sync = (client_count > last_client_count);
+  last_client_count = client_count;
+
   for (auto &obj : gameobjects)
   {
-    if (last_client_count == client_count)
-    {
-      if (!obj->needs_sync)
-        continue;
+    // If nothing changed and no new player needs a full update, skip
+    if (obj->sync_flags == SYNC_NONE && !force_full_sync)
+      continue;
 
-      if (client_count > 0)
-        obj->needs_sync = false;
-    }
-
-    last_client_count = client_count;
     int id = obj->client_id;
+    int current_flags = force_full_sync ? SYNC_ALL : obj->sync_flags;
 
-    struct
+    // Prepare Packets
+    struct // pos
     {
       int id;
       Vector3 pos;
     } pPos = {id, obj->position};
-    struct
+    struct // angle
     {
       int id;
       float angle;
     } pAngle = {id, obj->angle};
+    struct // size
+    {
+      int id;
+      Vector3 box;
+      Vector3 offset;
+    } pSize = {id,
+               obj->collision_box,
+               obj->collision_offset};
+    struct // classname
+    {
+      int id;
+      char classname[64];
+    } pClassname;
+    pClassname.id = id;
+    memset(pClassname.classname, 0, 64);
+    obj->classname.copy(pClassname.classname, 63);
+
+    struct // visible
+    {
+      int id;
+      bool visible;
+    } pVisible = {
+        id,
+        obj->visible,
+    };
+
+    struct
+    {
+      int id;
+      char model_path[128];
+      Vector3 scale;
+    } pModel;
+    pModel.id = id;
+    memset(pModel.model_path, 0, 128);
+    obj->game_model.model_path.copy(pModel.model_path, 127);
+    pModel.scale = obj->game_model.scale;
 
     for (int i = 0; i < client_count; i++)
     {
-      if (!users[i].peer)
+      if (!users[i].peer || users[i].player_id == my_local_player_id)
         continue;
-      if (users[i].player_id == my_local_player_id)
-        continue; // don't echo back to the host's own client
 
-      SendToClient(users[i].peer, MESSAGE_TYPE_INTERNAL_POS_UPDATE,
-                   &pPos, sizeof(pPos));
-      SendToClient(users[i].peer, MESSAGE_TYPE_INTERNAL_ANGLE_UPDATE,
-                   &pAngle, sizeof(pAngle));
+      if (current_flags & SYNC_POS)
+        SendToClient(users[i].peer, MESSAGE_TYPE_INTERNAL_POS_UPDATE, &pPos, sizeof(pPos));
+
+      if (current_flags & SYNC_ANGLE)
+        SendToClient(users[i].peer, MESSAGE_TYPE_INTERNAL_ANGLE_UPDATE, &pAngle, sizeof(pAngle));
+
+      if (current_flags & SYNC_SIZE)
+        SendToClient(users[i].peer, MESSAGE_TYPE_INTERNAL_SIZE_UPDATE, &pSize, sizeof(pSize));
+
+      if (current_flags & SYNC_CLASSNAME)
+        SendToClient(users[i].peer, MESSAGE_TYPE_INTERNAL_CLASSNAME_UPDATE, &pClassname, sizeof(pClassname));
+
+      if (current_flags & SYNC_VISIBLE)
+        SendToClient(users[i].peer, MESSAGE_TYPE_INTERNAL_VISIBLE_UPDATE, &pVisible, sizeof(pVisible));
+
+      if (current_flags & SYNC_MODEL)
+        SendToClient(users[i].peer, MESSAGE_TYPE_INTERNAL_MODEL_UPDATE, &pModel, sizeof(pModel));
+
+      if (current_flags & SYNC_SCRIPTVARS)
+      {
+        std::vector<uint8_t> buffer;
+
+        // Pack the ID
+        uint8_t *idPtr = (uint8_t *)&id;
+        buffer.insert(buffer.end(), idPtr, idPtr + sizeof(int));
+
+        // Pack the number of variables
+        int varCount = (int)obj->script_vars.size();
+        uint8_t *countPtr = (uint8_t *)&varCount;
+        buffer.insert(buffer.end(), countPtr, countPtr + sizeof(int));
+
+        for (auto const &[key, val] : obj->script_vars)
+        {
+          // Pack Key String (Length + Data)
+          int keyLen = (int)key.length();
+          buffer.insert(buffer.end(), (uint8_t *)&keyLen, (uint8_t *)&keyLen + sizeof(int));
+          buffer.insert(buffer.end(), key.begin(), key.end());
+
+          // Pack Variant Type
+          int typeIndex = (int)val.index(); // 0=string, 1=float, 2=bool, 3=int
+          buffer.insert(buffer.end(), (uint8_t *)&typeIndex, (uint8_t *)&typeIndex + sizeof(int));
+
+          // Pack Variant Value
+          if (typeIndex == 0)
+          { // string
+            std::string s = std::get<std::string>(val);
+            int sLen = (int)s.length();
+            buffer.insert(buffer.end(), (uint8_t *)&sLen, (uint8_t *)&sLen + sizeof(int));
+            buffer.insert(buffer.end(), s.begin(), s.end());
+          }
+          else if (typeIndex == 1)
+          { // float
+            float f = std::get<float>(val);
+            uint8_t *p = (uint8_t *)&f;
+            buffer.insert(buffer.end(), p, p + sizeof(float));
+          }
+          else if (typeIndex == 2)
+          { // bool
+            bool b = std::get<bool>(val);
+            buffer.push_back(b ? 1 : 0);
+          }
+          else if (typeIndex == 3)
+          { // int
+            int i = std::get<int>(val);
+            uint8_t *p = (uint8_t *)&i;
+            buffer.insert(buffer.end(), p, p + sizeof(int));
+          }
+        }
+
+        SendToClient(users[i].peer, MESSAGE_TYPE_INTERNAL_SCRIPTVARS_UPDATE, buffer.data(), buffer.size());
+      }
     }
+
+    // Reset flags after syncing (only if we weren't just forcing a full sync for a new guy)
+    obj->sync_flags = SYNC_NONE;
   }
 }
 
