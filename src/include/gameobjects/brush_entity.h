@@ -2,22 +2,6 @@
 #include <gameobject3d.h>
 #include <bsp.h>
 
-/*
-BrushEntity
-A GameObject3D that owns a piece of BSP brush geometry and its entity data.
-Subclass this for specific entity types (func_door, trigger_once, etc.).
-
-Basic usage — just renders the brush at its origin and provides tag access:
-
-  class MyDoor : public BrushEntity
-  {
-  public:
-    void Update() override
-    {
-      // GetTag("speed"), GetTag("targetname"), etc.
-    }
-  };
-*/
 class BrushEntity : public GameObject3D
 {
 public:
@@ -49,10 +33,6 @@ public:
     {
       visible = false;
     }
-
-    printf("BRUSH ENTITY CREATED: %p | Class: %s\n", (void *)this, classname.c_str());
-    printf("  Spawn Origin: (%.2f, %.2f, %.2f)\n", spawn_origin.x, spawn_origin.y, spawn_origin.z);
-    printf("  Position: (%.2f, %.2f, %.2f)\n", position.x, position.y, position.z);
   }
 
   // Read a tag value, returns fallback if not present
@@ -106,55 +86,42 @@ public:
 
   void Draw() override
   {
-    if (has_model)
-    {
-      if (visible)
-      {
-        BoundingBox bb = GetModelBoundingBox(brush_model);
+    if (!has_model)
+      return;
 
-        Vector3 model_center = {
-            (bb.min.x + bb.max.x) * 0.5f,
-            (bb.min.y + bb.max.y) * 0.5f,
-            (bb.min.z + bb.max.z) * 0.5f};
-        Vector3 draw_offset = Vector3Subtract(position, model_center);
-        DrawModel(brush_model, draw_offset, 1.001f, WHITE); // scale up 0.001 so we dont z-fight
-      }
+    if (!visible)
+      return;
 
-      if (global_show_collisions)
-        DrawBoundingBox(GetBoundingBox(), GREEN);
-    }
+    BoundingBox bb = GetModelBoundingBox(brush_model);
+
+    Vector3 model_center = {
+        (bb.min.x + bb.max.x) * 0.5f,
+        (bb.min.y + bb.max.y) * 0.5f,
+        (bb.min.z + bb.max.z) * 0.5f};
+    Vector3 draw_offset = Vector3Subtract(position, model_center);
+    DrawModel(brush_model, draw_offset, 1.001f, WHITE); // scale up 0.001 so we dont z-fight
   };
 
   void DrawDebug() override
   {
-    if (has_model)
-    {
-    }
+    if (!global_show_collisions)
+      return;
+
+    DrawBoundingBox(GetBoundingBox(), GREEN);
   }
 
   void CleanUp() override
   {
-    if (has_model)
-    {
-      UnloadModel(brush_model);
-      has_model = false;
-    }
+    if (!has_model)
+      return;
+
+    UnloadModel(brush_model);
+    has_model = false;
   }
 };
 
 /*
 SpawnBrushEntities
-Convenience wrapper: calls BSP_SpawnBrushEntities(), creates a BrushEntity for
-each result, and pushes it into the global gameobjects array.
-
-If you need custom logic per classname, replace this with your own loop:
-
-  for (auto &data : BSP_SpawnBrushEntities())
-  {
-    if      (data.classname == "func_door")    gameobjects.push_back(std::make_unique<Door>(data));
-    else if (data.classname == "trigger_once") gameobjects.push_back(std::make_unique<TriggerOnce>(data));
-    else                                       gameobjects.push_back(std::make_unique<BrushEntity>(data));
-  }
 */
 inline void SpawnBrushEntities()
 {

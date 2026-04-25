@@ -15,7 +15,7 @@ public:
 
 inline std::unordered_map<std::string, Model> model_cache;
 
-// ── Character Shader ────────────────────────────────────────────
+// Character Shader
 inline Shader characterShader;
 inline float char_ambientStrength = 0.35f;
 inline float char_specularStrength = 0.35f;
@@ -69,7 +69,6 @@ inline Model GetModelCached(const std::string &path)
     {
       model_cache[path].materials[i].shader = characterShader;
 
-      // ── Set texture unit ────────────────────────────────────────
       int texLoc = GetShaderLocation(characterShader, "texture0");
       if (texLoc != -1)
       {
@@ -77,7 +76,6 @@ inline Model GetModelCached(const std::string &path)
         SetShaderValue(characterShader, texLoc, &texUnit, SHADER_UNIFORM_INT);
       }
 
-      // ── Set lighting uniforms per-material ─────────────────────
       SetShaderValue(characterShader, GetShaderLocation(characterShader, "ambientStrength"),
                      &char_ambientStrength, SHADER_UNIFORM_FLOAT);
       SetShaderValue(characterShader, GetShaderLocation(characterShader, "specularStrength"),

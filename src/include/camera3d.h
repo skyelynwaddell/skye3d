@@ -13,7 +13,6 @@ inline Shader shader;
 inline Light camera_light;
 inline int light_power = 20;
 
-// Post-processing
 inline Shader pp_bloom_extract;
 inline Shader pp_blur;
 inline Shader pp_composite;
@@ -22,7 +21,6 @@ inline RenderTexture2D pp_bloom_fbo_a; // half-res bloom ping
 inline RenderTexture2D pp_bloom_fbo_b; // half-res bloom pong
 inline RenderTexture2D pp_gui_fbo;     // gui fbo
 
-// Post-process tunspables
 inline float pp_bloom_threshold = 0.55f;
 inline float pp_bloom_knee = 0.3f;
 inline float pp_bloom_intensity = 1.5f;

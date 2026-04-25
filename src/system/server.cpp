@@ -81,18 +81,15 @@ void enetserver_process_message(ENetEvent *event)
 
   // Validate sender
   int sender_id = GetPlayerID();
-  // printf("[SERVER DEBUG]: Packet from sender_id %d\n", sender_id);
 
   if (sender_id < 0 || sender_id >= MAX_PLAYERS)
   {
-    // printf("[SERVER]: Received packet from unknown peer, ignoring.\n");
     return;
   }
 
   // Validate packet size
   if (packet->dataLength < 1)
   {
-    // printf("[SERVER]: Received empty packet.\n");
     return;
   }
 
@@ -152,12 +149,11 @@ void enetserver_process_message(ENetEvent *event)
     auto it = vec3_handlers.find(name);
     if (it != vec3_handlers.end())
     {
-      // printf("[SERVER]: Handling vec3 packet '%s' from player %d\n", name.c_str(), sender_id);
       it->second(sender_id, payload, payload_len);
     }
     else
     {
-      // Unknown to C++ — forward to Squirrel
+      // Unknown to C++ — forward to lua
       client_to_server_packets.push_back({sender_id, name, vec});
     }
     break;
@@ -170,19 +166,6 @@ void enetserver_process_message(ENetEvent *event)
 };
 
 // In server.cpp or your main server logic
-//
-// NOTE: the previous implementation used a `{uint8_t type; int id; Vector3 pos;}`
-// struct and `enet_host_broadcast`. Both were wrong:
-//   1. The compiler inserts 3 bytes of alignment padding between `type` and
-//      `id`, so the wire format was [type][pad*3][id][pos], but the client
-//      decoder in client.cpp expects [type][id][pos] flat — every broadcast
-//      position arrived with a corrupted id and a 3-byte-shifted Vector3.
-//   2. `enet_host_broadcast` sends to every peer INCLUDING the host's own
-//      client, which then overwrote the already-correct position on the host
-//      with the echoed (and pre-fix, corrupted) value.
-// Fix: pack a flat [int id][Vector3 pos] payload and route it through
-// SendToClient (which prepends the type byte) to every peer except the host's
-// own client. This matches the SetPosition / RequestJoin wire format so the
 // client decoder stays unchanged.
 static int last_client_count = 0;
 static void enetserver_sync_entities()

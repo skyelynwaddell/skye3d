@@ -1,27 +1,3 @@
-// lua.cpp — sol2 + Lua 5.4 port of sq.cpp
-//
-// Design notes:
-//   * One sol::state per VM (client_lua / server_lua). Constructed in
-//     luaStartServer() / luaStartClient().
-//   * GameObject3D is registered as a sol2 usertype — scripts call methods
-//     naturally: obj:set_position(x,y,z), obj:get("key"), obj:destroy(), ...
-//     No manual stack management.
-//   * Enum-like tables (COLOR, KEY, MOUSE_BUTTON, GAMEPAD_BUTTON, GAMEPAD_AXIS,
-//     PACKET_TYPE) are created as Lua tables at VM setup.
-//   * `print()` is overridden per-VM so server prints [SERVER]: and client
-//     prints [CLIENT]:.
-//   * `set_think(func)` stores a sol::protected_function in an engine-owned
-//     per-object map. Calling luaClearThinks(obj) on destruction clears it.
-//   * Script files end in .lua instead of .nut. Paths are otherwise identical
-//     (gamedata/scripts/{server,client,shared}/...).
-//
-// All global function names match the Squirrel versions, so porting .nut files
-// to .lua is a largely syntax-level rewrite:
-//   this.set("k", v)          -> self:set("k", v)
-//   foo <- bar                -> foo = bar  (Lua globals)
-//   function f(x) {...}       -> function f(x) ... end
-//   print("x\n")              -> print("x")         (Lua print adds newline)
-
 #define SOL_ALL_SAFETIES_ON 1
 #define SOL_USE_STD_OPTIONAL 1
 #define SOL_LUA_VERSION 504
@@ -1062,13 +1038,7 @@ void luaRunFunc(sol::state &lua, const char *func_name, float dt)
 // -----------------------------------------------------------------------
 // BSP Entity Spawning
 // -----------------------------------------------------------------------
-// Calls the Lua function named `classname` (a global) with (self, origin, tags)
-// where self is the fresh GameObject3D created by InstanceCreate.
-//
-// NOTE: see the earlier audit in this codebase — the fact that this creates
-// a plain GameObject3D while SpawnBrushEntities() already creates a BrushEntity
-// for the same BSP entity means the same entity ends up represented twice in
-// `gameobjects`. Parity with sq.cpp is preserved here; the caller decides.
+// Calls the Lua function named `classname` with (self, origin, tags)
 static void luaCallEntitySpawnerInVM(sol::state *lua,
                                      const std::string &classname,
                                      Vector3 origin,
@@ -1078,9 +1048,6 @@ static void luaCallEntitySpawnerInVM(sol::state *lua,
 {
   if (!lua)
     return;
-  // printf("luaCallEntitySpawnerInVM (%s) classname=%s\n",
-  //        (lua == server_lua.get()) ? "SERVER" : "CLIENT",
-  //        classname.c_str());
 
   sol::object sp = (*lua)[classname];
   if (!sp.valid() || sp.get_type() != sol::type::function)

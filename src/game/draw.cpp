@@ -38,6 +38,8 @@ void Draw()
   CharacterShader_Update();
   GameObject3D_DrawAll();
 
+  GameObject3D_DrawAllDebug();
+
   EndMode3D();
   EndTextureMode();
 
@@ -124,18 +126,4 @@ void Draw()
   rlDisableTexture();
   rlActiveTextureSlot(0);
   EndShaderMode();
-
-  rlDisableBackfaceCulling();
-  rlEnableDepthTest();
-  rlSetBlendMode(BLEND_ALPHA);
-
-  rlSetTexture(0);
-  rlActiveTextureSlot(0);
-
-  BeginMode3D(*camera);
-  rlSetLineWidth(10.0f);
-  BeginShaderMode(debug_shader);
-  GameObject3D_DrawAllDebug();
-  EndShaderMode();
-  EndMode3D();
 };

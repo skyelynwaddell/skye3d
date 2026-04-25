@@ -1,4 +1,3 @@
-// lua.h — sol2 + Lua 5.4 replacement for sq.h
 #pragma once
 #ifndef SOL_LUA_VERSION
 #define SOL_LUA_VERSION 504
@@ -15,8 +14,6 @@
 // -----------------------------------------------------------------------
 // Global VM states
 // -----------------------------------------------------------------------
-// Constructed lazily in luaStartServer() / luaStartClient() so they can be
-// torn down and recreated if needed. Access via (*client_lua), client_lua->...
 inline std::unique_ptr<sol::state> client_lua;
 inline std::unique_ptr<sol::state> server_lua;
 
@@ -28,7 +25,7 @@ enum VM_TYPE
 };
 
 // -----------------------------------------------------------------------
-// Public API (mirrors sq.h)
+// Public API
 // -----------------------------------------------------------------------
 
 // BSP entity spawning
@@ -55,7 +52,7 @@ void luaUpdate(float dt);
 void luaDraw(float dt);
 void luaDrawGUI(float dt);
 
-// Internal: register a "think" function (called per-frame while object lives)
+// register a "think" function (called per-frame while object lives)
 // for a particular GameObject3D in a given VM. Exposed so engine code can
 // clear them on object destruction.
 class GameObject3D;

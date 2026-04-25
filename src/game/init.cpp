@@ -33,6 +33,6 @@ void Init()
     global_map_to_load = "";
   }
 
-  DisableCursor(); // Limit cursor to relative movement inside the w
+  DisableCursor();
   Camera3D_Init();
 };

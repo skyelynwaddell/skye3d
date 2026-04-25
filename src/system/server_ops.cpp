@@ -4,8 +4,8 @@
 /*
 SendToClient
 Send a packet directly to the CPP client.cpp file of a certain user
-Not to to squirrel Client :)
-This helps to directly communicate with client when you dont want squirrel code to interfere
+Not to to lua Client :)
+This helps to directly communicate with client when you dont want lua code to interfere
 For example movement
 */
 void SendToClient(ENetPeer *peer, uint8_t type, const void *data, size_t data_len)
@@ -55,14 +55,6 @@ void SpawnPlayer(int id)
 /*
 ConnectUser
 Called when a client connects to server.
-
-Assigns the lowest free slot, NOT `client_count++`. Combined with the
-null-the-slot behaviour in DisconnectUser, this keeps player IDs stable
-across the life of the session — a player who got id=2 keeps id=2 until
-they disconnect, and no remap ever silently reassigns someone else's id.
-`client_count` is kept as a high-water mark for the iterating loops in
-SetPosition / enetserver_sync_entities / send_packet_number broadcasts;
-those loops all skip slots where `users[i].peer == nullptr`.
 */
 void ConnectUser(ENetPeer *peer)
 {
@@ -100,16 +92,6 @@ void ConnectUser(ENetPeer *peer)
 
 /*
 RequestJoin
-Spawns the joining player and syncs world state to them, then ACKs the
-join back to the requester's Lua layer.
-
-The ACK is critical. cs_network.lua's `join_game()` registers
-`pending_callbacks["request_join"] = function(packet) player_id = packet.value end`
-via `send_request`. The C++ server short-circuits the "request_join"
-packet (see server_handlers.h float_handlers) and does NOT forward it to
-sv_network.lua's handler, so without an explicit ACK here the Lua
-`player_id` variable on a client never converges to the real assigned id
-and every cs-side call that uses it as a client_id operates on stale data.
 */
 void RequestJoin(int sender_id)
 {
@@ -134,10 +116,6 @@ void RequestJoin(int sender_id)
 
     if (users[i].object_ref)
     {
-      // Flat [int id][Vector3 pos] layout — matches client decoder in
-      // client.cpp for MESSAGE_TYPE_INTERNAL_POS_UPDATE. `int` is 4-byte
-      // aligned and Vector3 is also 4-byte aligned, so this struct has
-      // no internal padding.
       struct
       {
         int id;
@@ -147,8 +125,6 @@ void RequestJoin(int sender_id)
     }
   }
 
-  // ACK the requester with their id so cs_network.lua's pending callback
-  // fires and assigns `player_id = sender_id`.
   if (sender_id == my_local_player_id)
     Net_ToSQClient(sender_id, "request_join", (float)sender_id);
   else if (users[sender_id].peer)
@@ -194,13 +170,6 @@ void SetAngle(float new_angle, int sender_id)
 /*
 DisconnectUser
 Removes a user from the list and destroys their game object.
-
-IMPORTANT: we do NOT compact the `users[]` array. Compacting silently
-changes the stable ID → slot mapping, which breaks every lookup in the
-codebase that does `users[sender_id].object_ref` (SetPosition, the
-packet broadcasters in lua.cpp, etc.) and leaves `GameObject3D::client_id`
-fields pointing at the wrong users[] entry. Instead we just null the
-slot so the id can be reclaimed by the next ConnectUser.
 */
 void DisconnectUser(ENetPeer *peer)
 {
