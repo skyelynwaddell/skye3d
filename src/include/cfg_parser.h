@@ -54,6 +54,14 @@ inline void CFG_LoadSettings()
   Config settings;
   if (settings.load("gamedata/settings.cfg"))
   {
+    SCREEN_WIDTH = settings.getInt("screen_width");
+    SCREEN_HEIGHT = settings.getInt("screen_height");
+    RENDER_WIDTH = settings.getInt("render_width");
+    RENDER_HEIGHT = settings.getInt("render_height");
+    GUI_WIDTH = settings.getInt("gui_width");
+    GUI_HEIGHT = settings.getInt("gui_height");
+    global_guiscale = settings.getFloat("gui_scale");
+
     global_window_title = settings.getString("window_title");
     global_server_ip = settings.getString("ip");
     global_server_port = settings.getInt("port");

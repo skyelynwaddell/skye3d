@@ -5,6 +5,7 @@
 #include <rlImGui.h>
 #include <gameobjects/brush_entity.h>
 #include <lua.hpp>
+#include <skyeui.h>
 
 void Init()
 {
@@ -17,6 +18,9 @@ void Init()
   rlEnableBackfaceCulling();
   rlImGuiSetup(false);
   CharacterShader_Init();
+  SkyeUI_Init();
+
+  SetExitKey(KEY_NULL);
 
   if (global_is_hosting)
     luaStartServer();

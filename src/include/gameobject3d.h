@@ -74,15 +74,12 @@ public:
   void Destroy() { destroy_me = true; };
   bool IsMoving() { return Vector3Length(velocity) > 0.01f; };
 
-  bool IsMenuMode = false;
   void UpdateInputMode()
   {
-    if (!IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))
-      return;
-    IsMenuMode = !IsMenuMode;
-    IsMenuMode ? EnableCursor() : DisableCursor();
     if (IsMenuMode)
-      velocity = {0, 0, 0};
+    {
+      velocity = {0, velocity.y, 0};
+    }
   };
 
   virtual Vector3 GetInteractCenter()

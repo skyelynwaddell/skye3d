@@ -115,7 +115,7 @@ inline void PostProcess_CreateFBOs(int w, int h)
   pp_scene_fbo = LoadRenderTexture(w, h);
   pp_bloom_fbo_a = LoadRenderTexture(w / 2, h / 2);
   pp_bloom_fbo_b = LoadRenderTexture(w / 2, h / 2);
-  pp_gui_fbo = LoadRenderTexture(w, h);
+  pp_gui_fbo = LoadRenderTexture(GUI_WIDTH, GUI_HEIGHT);
 }
 
 inline void PostProcess_DestroyFBOs()

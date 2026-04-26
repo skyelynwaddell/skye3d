@@ -31,7 +31,8 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 
 target_include_directories(game PRIVATE 
-    src/include
+		src/include
+		src/lib/raygui
     src/include/gameobjects
 		src/lib
 		src/lib/lua/include
@@ -40,25 +41,15 @@ target_include_directories(game PRIVATE
 
 add_definitions(-DHAS_GETADDRINFO)
 target_link_libraries(game PRIVATE 
-raylib 
-imgui 
-rlImGui
-${CMAKE_SOURCE_DIR}/src/lib/enet/libenet.a
-${CMAKE_SOURCE_DIR}/src/lib/lua/liblua54.a
-	winmm ws2_32
+		raylib 
+		imgui 
+		rlImGui
+		${CMAKE_SOURCE_DIR}/src/lib/enet/libenet.a
+		${CMAKE_SOURCE_DIR}/src/lib/lua/liblua54.a
+		winmm ws2_32
 )
 
 target_compile_options(game PRIVATE -g)
-
-if (MSVC)
-	target_compile_options(game PUBLIC $<$<CONFIG:Debug>:/ZI>)
-	target_link_options(game PUBLIC $<$<CONFIG:Release>:/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup>)
-endif()
-
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fno-omit-frame-pointer")
-    set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} -fsanitize=address")
-endif()
 
 target_compile_definitions(game PRIVATE
 	MAP_SOURCE_DIR="${CMAKE_SOURCE_DIR}/gamedata/maps"

@@ -6,6 +6,9 @@ inline int SCREEN_WIDTH = 1920;
 inline int SCREEN_HEIGHT = 1080;
 inline int RENDER_WIDTH = 1920;
 inline int RENDER_HEIGHT = 1080;
+inline float GUI_WIDTH = 1920;
+inline float GUI_HEIGHT = 1080;
+inline float global_guiscale = 2.0f;
 
 void Init();
 void Update();
