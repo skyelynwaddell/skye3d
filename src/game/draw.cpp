@@ -19,12 +19,14 @@ void Draw()
   ClearBackground(BLACK);
 
   static bool enable_wireframe = false;
-  if (SCREEN_WIDTH != lastscreenw || SCREEN_HEIGHT != lastscreenh)
+  int curw = GetScreenWidth();
+  int curh = GetScreenHeight();
+  if (curw != lastscreenw || curh != lastscreenh)
   {
     PostProcess_DestroyFBOs();
     PostProcess_CreateFBOs(RENDER_WIDTH, RENDER_HEIGHT);
-    lastscreenw = SCREEN_WIDTH;
-    lastscreenh = SCREEN_HEIGHT;
+    lastscreenw = curw;
+    lastscreenh = curh;
   }
 
   BSP_UpdateFlashlight(camera.get(), default_shader, characterShader, liquid_shader);

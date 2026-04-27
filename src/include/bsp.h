@@ -3,6 +3,7 @@
 #include <raylib.h>
 #include <raymath.h>
 #include <rlgl.h>
+#include <input_bindings.h>
 
 #include <ctime>
 #include <algorithm>
@@ -731,14 +732,19 @@ inline float bsp_flashRange = 30.0f;
 inline float bsp_flashConeAngle = 35.0f; // cone size
 inline int bsp_flashEnabled = 1;
 
+inline void BSP_ToggleFlashlight()
+{
+  bsp_flashEnabled = (bsp_flashEnabled == 1) ? 0 : 1;
+};
+
 inline void BSP_UpdateFlashlight(Camera *cam, Shader worldShader, Shader charShader, Shader waterShader)
 {
   bsp_flashPos = cam->position;
   Vector3 forward = Vector3Normalize(Vector3Subtract(cam->target, cam->position));
   bsp_flashDir = forward;
 
-  if (IsKeyPressed(KEY_F))
-    bsp_flashEnabled = (bsp_flashEnabled == 1) ? 0 : 1;
+  if (EngineInputPressed("flashlight"))
+    BSP_ToggleFlashlight();
 
   auto UpdateShader = [&](Shader s)
   {
@@ -2008,12 +2014,9 @@ struct BSP_Collider
     }
   };
 
-  /*
-
-  */
   void PlayerJump(Vector3 &vel, bool is_grounded)
   {
-    if (is_grounded && (IsKeyPressed(KEY_SPACE) || IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN)))
+    if (is_grounded && EngineInputPressed("jump"))
     {
       vel.y = 270.0f * bsp_raylib_scale;
     }

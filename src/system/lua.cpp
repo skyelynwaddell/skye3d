@@ -23,6 +23,8 @@ extern "C"
 #include <algorithm>
 
 #include "global.h"
+#include "input_bindings.h" // g_engine_bindings, EngineBinding, EBIND_KEY/MOUSE
+#include "skyeui.h" // SkyeUI_Panel, SkyeUI_VerticalItemList, MenuItem, PanelState
 #include "enet.h"
 #include "net_utils.h"
 #include "camera3d.h"
@@ -181,6 +183,10 @@ static void register_enums(sol::state &lua)
   mb["EXTRA"] = 4;
   mb["FORWARD"] = 5;
   mb["BACK"] = 6;
+  // Virtual codes for scroll wheel — not real raylib buttons,
+  // handled specially in btn_pressed / EngineInputPressed.
+  mb["WHEEL_UP"]   = 10;
+  mb["WHEEL_DOWN"] = 11;
 
   // ---- PACKET_TYPE ----
   sol::table pt = lua.create_named_table("PACKET_TYPE");
@@ -233,10 +239,22 @@ static void register_enums(sol::state &lua)
     key[fkey] = 289 + i;
   }
   // Modifiers
-  key["LEFT_SHIFT"] = 340;
-  key["LEFT_CONTROL"] = 341;
-  key["LEFT_ALT"] = 342;
-  key["RIGHT_SHIFT"] = 344;
+  key["GRAVE"]         = 96;   // ` / ~
+  key["LEFT_BRACKET"]  = 91;   // [
+  key["RIGHT_BRACKET"] = 93;   // ]
+  key["BACKSLASH"]     = 92;   // '\'
+  key["PAGE_UP"]       = 266;
+  key["PAGE_DOWN"]     = 267;
+  key["HOME"]          = 268;
+  key["END"]           = 269;
+  key["CAPS_LOCK"]     = 280;
+  key["PRINT_SCREEN"]  = 283;
+  key["LEFT_SHIFT"]    = 340;
+  key["LEFT_CONTROL"]  = 341;
+  key["LEFT_ALT"]      = 342;
+  key["RIGHT_SHIFT"]   = 344;
+  key["RIGHT_CONTROL"] = 345;
+  key["RIGHT_ALT"]     = 346;
 
   // ---- GAMEPAD_BUTTON ----
   sol::table gb = lua.create_named_table("GAMEPAD_BUTTON");
@@ -592,6 +610,12 @@ static void bind_globals(sol::state &lua, bool is_server)
     lua.set_function("set_mouse_cursor", [](int id)
                      { SetMouseCursor(id); });
 
+    // --- input: key queue ---
+    // Returns the keycode of the next key pressed this frame (drains one entry
+    // per call from raylib's internal queue). Returns 0 when the queue is empty.
+    lua.set_function("get_key_pressed", []()
+                     { return GetKeyPressed(); });
+
     // --- input: keys ---
     lua.set_function("is_key_pressed", [](int k)
                      { return IsKeyPressed(k); });
@@ -887,6 +911,254 @@ static void install_print_override(sol::state &lua, const char *prefix)
 }
 
 // -----------------------------------------------------------------------
+// SkyeUI Lua bindings
+// -----------------------------------------------------------------------
+
+// Lua-facing MenuItem: owns its values so Lua can hold and mutate them.
+// Pointers into this struct are handed to the C++ MenuItem for one
+// synchronous SkyeUI_Panel / SkyeUI_VerticalItemList call, then discarded.
+struct LuaMenuItem
+{
+  int type = MENUITEMTYPE_BUTTON;
+  std::string text = "";
+  sol::protected_function onpress;
+
+  // Value fields — raygui reads/writes through pointers to these.
+  float value_f = 0.f;
+  bool value_b = false;
+  int value_i = 0;
+  float min_f = 0.f, max_f = 1.f;
+  int min_i = 0, max_i = 100;
+
+  // Textbox char buffer (exposed in Lua as value_s string property).
+  int buf_size = 256;
+  char _buf[256] = {};
+
+  // KEYBIND: alternate key display name
+  std::string text2 = "";
+
+  // raygui edit state for dropdown / spinner / textbox — must survive frames.
+  bool _edit = false;
+};
+
+// Build a temporary std::vector<MenuItem> that points into the LuaMenuItem
+// objects for the duration of one synchronous SkyeUI call.
+static std::vector<MenuItem>
+lua_build_items(sol::table &tbl, std::vector<LuaMenuItem *> &out_ptrs)
+{
+  out_ptrs.clear();
+  for (auto &pair : tbl)
+  {
+    if (pair.second.is<LuaMenuItem *>())
+    {
+      out_ptrs.push_back(pair.second.as<LuaMenuItem *>());
+    }
+  }
+
+  std::vector<MenuItem> items;
+  items.reserve(out_ptrs.size());
+  for (LuaMenuItem *li : out_ptrs)
+  {
+    MenuItem m;
+    m.type  = static_cast<MenuItemType>(li->type);
+    m.text  = li->text;
+    m.text2 = li->text2;
+    m.min_f = li->min_f;
+    m.max_f = li->max_f;
+    m.min_i = li->min_i;
+    m.max_i = li->max_i;
+    m.buf_size = li->buf_size;
+    m._edit = li->_edit;
+    // Pointer directly into the LuaMenuItem — raygui writes through these.
+    m.value_f = &li->value_f;
+    m.value_b = &li->value_b;
+    m.value_i = &li->value_i;
+    m.value_s = li->_buf;
+    if (li->onpress.valid())
+    {
+      m.onpress = [li]()
+      {
+        auto r = li->onpress();
+        if (!r.valid())
+        {
+          sol::error e = r;
+          printf("[CLIENT] ui onpress error: %s\n", e.what());
+        }
+      };
+    }
+    items.push_back(std::move(m));
+  }
+  return items;
+}
+
+// Copy back only the fields raygui may have mutated via its own internal logic
+// (_edit toggle state). Value fields are already in sync because raygui wrote
+// through the pointers directly into the LuaMenuItem structs.
+static void lua_sync_items(std::vector<MenuItem> &cpp, std::vector<LuaMenuItem *> &ptrs)
+{
+  for (size_t i = 0; i < ptrs.size() && i < cpp.size(); ++i)
+    ptrs[i]->_edit = cpp[i]._edit;
+}
+
+static void register_skyeui(sol::state &lua)
+{
+  // ---- MENU enum ----
+  auto menu = lua.create_named_table("MENU");
+  menu["BUTTON"] = (int)MENUITEMTYPE_BUTTON;
+  menu["LABEL"] = (int)MENUITEMTYPE_LABEL;
+  menu["SEPARATOR"] = (int)MENUITEMTYPE_SEPARATOR;
+  menu["SLIDER"] = (int)MENUITEMTYPE_SLIDER;
+  menu["SLIDERBAR"] = (int)MENUITEMTYPE_SLIDERBAR;
+  menu["PROGRESSBAR"] = (int)MENUITEMTYPE_PROGRESSBAR;
+  menu["CHECKBOX"] = (int)MENUITEMTYPE_CHECKBOX;
+  menu["TOGGLE"] = (int)MENUITEMTYPE_TOGGLE;
+  menu["DROPDOWN"] = (int)MENUITEMTYPE_DROPDOWN;
+  menu["SPINNER"] = (int)MENUITEMTYPE_SPINNER;
+  menu["TEXTBOX"]        = (int)MENUITEMTYPE_TEXTBOX;
+  menu["KEYBIND"]        = (int)MENUITEMTYPE_KEYBIND;
+  menu["KEYBIND_HEADER"] = (int)MENUITEMTYPE_KEYBIND_HEADER;
+
+  // ---- MenuItem usertype ----
+  lua.new_usertype<LuaMenuItem>(
+      "MenuItem",
+      "new", sol::factories([]()
+                            { return LuaMenuItem{}; }),
+
+      "type", &LuaMenuItem::type,
+      "text", &LuaMenuItem::text,
+      "onpress", &LuaMenuItem::onpress,
+
+      "value_f", &LuaMenuItem::value_f,
+      "value_b", &LuaMenuItem::value_b,
+      "value_i", &LuaMenuItem::value_i,
+
+      // value_s maps to the internal char buffer
+      "value_s", sol::property([](LuaMenuItem &m) -> std::string
+                               { return m._buf; }, [](LuaMenuItem &m, const std::string &s)
+                               {
+            strncpy(m._buf, s.c_str(), sizeof(m._buf) - 1);
+            m._buf[sizeof(m._buf) - 1] = '\0'; }),
+
+      "text2", &LuaMenuItem::text2,
+
+      "min_f", &LuaMenuItem::min_f,
+      "max_f", &LuaMenuItem::max_f,
+      "min_i", &LuaMenuItem::min_i,
+      "max_i", &LuaMenuItem::max_i,
+      "buf_size", &LuaMenuItem::buf_size);
+
+  // ---- PanelState usertype ----
+  lua.new_usertype<PanelState>(
+      "PanelState",
+      "new", sol::factories([]()
+                            { return PanelState{}; }),
+      "x",          &PanelState::x,
+      "y",          &PanelState::y,
+      "w",          &PanelState::w,
+      "h",          &PanelState::h,
+      "active_tab", &PanelState::active_tab);
+
+  // ---- ui_panel(title, items, state, item_h [, tabs [, bottom]]) -> bool ----
+  // tabs   : optional array of strings  { "Tab1", "Tab2", ... }
+  // bottom : optional array of MenuItem  { apply_btn, cancel_btn, ... }
+  // Returns true while the panel is open; false when the X button is clicked.
+  lua.set_function("ui_panel",
+                   [](const char *title, sol::table tbl, PanelState &state, float item_h,
+                      sol::optional<sol::table> tabs_opt,
+                      sol::optional<sol::table> bottom_opt) -> bool
+                   {
+                     // ---- items ----
+                     std::vector<LuaMenuItem *> item_ptrs;
+                     auto cpp_items = lua_build_items(tbl, item_ptrs);
+
+                     // ---- tabs (optional) ----
+                     std::vector<std::string> tabs_vec;
+                     if (tabs_opt)
+                     {
+                       sol::table &tt = *tabs_opt;
+                       for (auto &kv : tt)
+                         if (kv.second.is<std::string>())
+                           tabs_vec.push_back(kv.second.as<std::string>());
+                     }
+                     const std::vector<std::string> *tabs_ptr =
+                         tabs_vec.empty() ? nullptr : &tabs_vec;
+
+                     // ---- bottom bar (optional) ----
+                     std::vector<LuaMenuItem *> bot_ptrs;
+                     std::vector<MenuItem>       cpp_bot;
+                     std::vector<MenuItem>       *bot_ptr = nullptr;
+                     if (bottom_opt)
+                     {
+                       cpp_bot  = lua_build_items(*bottom_opt, bot_ptrs);
+                       bot_ptr  = &cpp_bot;
+                     }
+
+                     bool open = SkyeUI_Panel(title, cpp_items, state, item_h,
+                                              tabs_ptr, bot_ptr);
+
+                     lua_sync_items(cpp_items, item_ptrs);
+                     if (bot_ptr) lua_sync_items(cpp_bot, bot_ptrs);
+                     return open;
+                   });
+
+  // ---- ui_item_list(items, x, y, w, h) ----
+  // Bare vertical list with no panel chrome (no title bar, no border).
+  lua.set_function("ui_item_list",
+                   [](sol::table tbl, float x, float y, float w, float h)
+                   {
+                     std::vector<LuaMenuItem *> ptrs;
+                     auto cpp = lua_build_items(tbl, ptrs);
+                     SkyeUI_VerticalItemList(cpp, x, y, w, h);
+                     lua_sync_items(cpp, ptrs);
+                   });
+
+  // ---- Menu-mode helpers ----
+  // set_menu_mode(true)  → show cursor, freeze player input
+  // set_menu_mode(false) → hide cursor, resume player input
+  lua.set_function("set_menu_mode", [](bool on)
+                   {
+    if ((bool)IsMenuMode == on) return;
+    IsMenuMode = on;
+    if (on)
+    {
+      EnableCursor();
+      SetMousePosition(GetScreenWidth() / 2, GetScreenHeight() / 2);
+    }
+    else
+    {
+      DisableCursor();
+    } });
+
+  lua.set_function("is_menu_mode", []() -> bool
+                   { return (bool)IsMenuMode; });
+
+  // ---- set_engine_binding(name, type, code) ----
+  // Pushes a primary Lua binding change into the C++ g_engine_bindings table.
+  //   name  — binding key string, e.g. "jump", "up", "flashlight"
+  //   type  — "key" or "mouse"  (matches Lua INPUT_KEY / INPUT_MOUSE constants)
+  //   code  — raylib key/mouse-button integer code; -1 = unbound
+  lua.set_function("set_engine_binding",
+                   [](const std::string &name, const std::string &type_str, int code)
+                   {
+                     EngineBindType t = (type_str == "mouse") ? EBIND_MOUSE : EBIND_KEY;
+                     auto &b = g_engine_bindings[name];
+                     b.type = t;
+                     b.code = code;
+                   });
+
+  // ---- set_engine_binding_alt(name, type, code) ----
+  // Pushes an alternate Lua binding change; preserves the primary binding.
+  lua.set_function("set_engine_binding_alt",
+                   [](const std::string &name, const std::string &type_str, int code)
+                   {
+                     EngineBindType t = (type_str == "mouse") ? EBIND_MOUSE : EBIND_KEY;
+                     auto &b = g_engine_bindings[name];
+                     b.alt_type = t;
+                     b.alt_code = code;
+                   });
+}
+
+// -----------------------------------------------------------------------
 // VM Setup
 // -----------------------------------------------------------------------
 static std::unique_ptr<sol::state> luaSetupVM(bool is_server)
@@ -908,6 +1180,9 @@ static std::unique_ptr<sol::state> luaSetupVM(bool is_server)
   register_enums(*lua);
   register_gameobject3d_usertype(*lua, is_server);
   bind_globals(*lua, is_server);
+
+  if (!is_server)
+    register_skyeui(*lua);
 
   return lua;
 }

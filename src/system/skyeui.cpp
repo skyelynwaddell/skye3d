@@ -1,7 +1,6 @@
 #define RAYGUI_IMPLEMENTATION
 #include "skyeui.h"
 #include <engine.h>
-#include <hud.h>
 #include <raymath.h>
 
 // ============================================================
@@ -17,7 +16,14 @@ static constexpr float PANEL_TITLE_H = 24.0f; // height of the panel title bar
 // ============================================================
 void SkyeUI_Init()
 {
-  GuiLoadStyle("src/lib/raygui/styles/custom/skyeblue.rgs");
+  GuiLoadStyle("src/lib/raygui/styles/custom/skyeblue2.rgs");
+  // Leave the font texture at the default BILINEAR filter.
+  // Raygui centres text with float math so glyphs often land at fractional
+  // pixel positions inside the FBO.  Point filtering would snap those
+  // positions to the nearest pixel, producing 1-px jitter whenever a
+  // button changes hover state.  Bilinear blends the sub-pixel offset
+  // smoothly — any softness is imperceptible at normal GUI scale and far
+  // better than the jitter artefact.
 }
 
 // ============================================================
@@ -85,6 +91,39 @@ void SkyeUI_VerticalItemList(std::vector<MenuItem> &items,
     }
   }
 
+  // ---- Keybind row selection pre-pass ----
+  // Detect clicks on KEYBIND rows and update selection before any rendering,
+  // so the highlight is correct on the same frame the click happens.
+  if (!GuiIsLocked())
+  {
+    int clicked_kb = -1;
+    for (size_t i = 0; i < items.size(); i++)
+    {
+      if (items[i].type != MENUITEMTYPE_KEYBIND)
+        continue;
+      Rectangle row_rect = {x, ys[i], w, h};
+      if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+          CheckCollisionPointRec(GetMousePosition(), row_rect))
+      {
+        clicked_kb = (int)i;
+        break;
+      }
+    }
+    if (clicked_kb >= 0)
+    {
+      // Deselect all keybind rows in this list
+      for (auto &item : items)
+        if (item.type == MENUITEMTYPE_KEYBIND && item.value_b)
+          *item.value_b = false;
+      // Select and notify the clicked row
+      auto &sel = items[clicked_kb];
+      if (sel.value_b)
+        *sel.value_b = true;
+      if (sel.onpress)
+        sel.onpress();
+    }
+  }
+
   // Collect dropdown indices — rendered after everything else so their
   // expanded list overlays items below them.  Each dropdown is called
   // exactly ONCE per frame (the standard raygui toggle pattern), which
@@ -139,7 +178,7 @@ void SkyeUI_VerticalItemList(std::vector<MenuItem> &items,
         if (HasTopLabel(item))
           GuiLabel({x, iy, w, LABEL_H}, item.text.c_str());
         float cy = iy + (HasTopLabel(item) ? LABEL_H : 0.f);
-        if (GuiSliderBar({x, cy, w, h}, nullptr, nullptr,
+        if (GuiSliderBar({x, cy, w, 10}, nullptr, nullptr,
                          item.value_f, item.min_f, item.max_f) &&
             item.onpress)
           item.onpress();
@@ -218,6 +257,45 @@ void SkyeUI_VerticalItemList(std::vector<MenuItem> &items,
       }
       break;
 
+    // -------------------------------------------------------
+    case MENUITEMTYPE_KEYBIND_HEADER:
+    {
+      // text = "col1;col2;col3"
+      std::string col[3] = {"", "", ""};
+      size_t p = 0;
+      int ci = 0;
+      for (size_t j = 0; j <= item.text.size() && ci < 3; ++j)
+      {
+        if (j == item.text.size() || item.text[j] == ';')
+        {
+          col[ci++] = item.text.substr(p, j - p);
+          p = j + 1;
+        }
+      }
+      float c1 = w * 0.50f, c2 = w * 0.28f;
+      int saved_c = GuiGetStyle(LABEL, TEXT_COLOR_NORMAL);
+      GuiSetStyle(LABEL, TEXT_COLOR_NORMAL, GuiGetStyle(DEFAULT, TEXT_COLOR_DISABLED));
+      GuiLabel({x, iy, c1, h}, col[0].c_str());
+      GuiLabel({x + c1, iy, c2, h}, col[1].c_str());
+      GuiLabel({x + c1 + c2, iy, w - c1 - c2, h}, col[2].c_str());
+      GuiSetStyle(LABEL, TEXT_COLOR_NORMAL, saved_c);
+      break;
+    }
+
+    // -------------------------------------------------------
+    case MENUITEMTYPE_KEYBIND:
+    {
+      float c1 = w * 0.50f, c2 = w * 0.28f;
+      bool sel = item.value_b && *item.value_b;
+      if (sel)
+        DrawRectangleRec({x, iy, w, h},
+                         GetColor(GuiGetStyle(DEFAULT, BASE_COLOR_FOCUSED)));
+      GuiLabel({x + 2.f, iy, c1 - 2.f, h}, item.text.c_str());
+      GuiLabel({x + c1, iy, c2, h}, item.value_s ? item.value_s : "");
+      GuiLabel({x + c1 + c2, iy, w - c1 - c2, h}, item.text2.c_str());
+      break;
+    }
+
     } // switch
   } // main pass
 
@@ -293,6 +371,8 @@ static constexpr float PANEL_MIN_W = 80.f;
 static constexpr float PANEL_MIN_H = 40.f;
 static constexpr float SCROLLBAR_W = 8.f;
 static constexpr float RESIZE_GRIP = 12.f;
+static constexpr float TAB_H = 24.f;        // height of the optional tab strip
+static constexpr float BOTTOM_BAR_H = 36.f; // height of the optional bottom button bar
 
 // ============================================================
 //  BeginScissorModeLogical
@@ -317,8 +397,14 @@ static void BeginScissorModeLogical(float lx, float ly, float lw, float lh)
 bool SkyeUI_Panel(const char *title,
                   std::vector<MenuItem> &items,
                   PanelState &state,
-                  float item_h)
+                  float item_h,
+                  const std::vector<std::string> *tabs,
+                  std::vector<MenuItem> *bottom)
 {
+  // ---- Optional section heights ----
+  float tab_strip_h = (tabs && !tabs->empty()) ? TAB_H : 0.f;
+  float bot_bar_h = (bottom && !bottom->empty()) ? BOTTOM_BAR_H : 0.f;
+
   // ---- Total content height ----
   float content_h = PANEL_PADDING;
   for (auto &item : items)
@@ -327,21 +413,20 @@ bool SkyeUI_Panel(const char *title,
 
   // ---- Viewport height ----
   // h == 0 → auto-fit, capped so the panel stays on screen
-  float max_auto = fmaxf(PANEL_MIN_H, LogH() - state.y - PANEL_TITLE_H - 20.f);
+  float max_auto = fmaxf(PANEL_MIN_H, LogH() - state.y - PANEL_TITLE_H - tab_strip_h - bot_bar_h - 20.f);
   float viewport_h = (state.h > 0.f) ? state.h : fminf(content_h, max_auto);
-  float panel_h = PANEL_TITLE_H + viewport_h;
+  float panel_h = PANEL_TITLE_H + tab_strip_h + viewport_h + bot_bar_h;
   bool needs_scroll = content_h > viewport_h + 1.f;
 
+  // Content area top (below title bar and optional tabs)
+  float content_top = state.y + PANEL_TITLE_H + tab_strip_h;
+
   // ---- Z-order input blocking ----
-  // Assign this panel a draw index (0 = furthest back, higher = closer to front).
-  // If the mouse is over this panel, record it as the current topmost candidate.
-  // If a panel drawn AFTER us (higher index) had the mouse last frame, block our input.
   int my_idx = s_panel_draw_idx++;
   Rectangle panel_rect = {state.x, state.y, state.w, panel_h};
   if (CheckCollisionPointRec(GetMousePosition(), panel_rect))
-    s_top_panel_this = my_idx; // last writer wins → topmost panel
+    s_top_panel_this = my_idx;
 
-  // input_blocked: another panel drawn on top of us owned the mouse last frame
   bool input_blocked = (s_top_panel_prev > my_idx) &&
                        CheckCollisionPointRec(GetMousePosition(), panel_rect);
 
@@ -363,7 +448,6 @@ bool SkyeUI_Panel(const char *title,
         {
           state.x = GetMousePosition().x - state._drag_offset.x;
           state.y = GetMousePosition().y - state._drag_offset.y;
-          // Keep entire panel on screen
           state.x = Clamp(state.x, 0.f, fmaxf(0.f, LogW() - state.w));
           state.y = Clamp(state.y, 0.f, fmaxf(0.f, LogH() - panel_h));
         }
@@ -390,11 +474,12 @@ bool SkyeUI_Panel(const char *title,
         {
           float new_right = GetMousePosition().x - state._drag_offset.x;
           float new_bottom = GetMousePosition().y - state._drag_offset.y;
-          state.w = Clamp(new_right - state.x, PANEL_MIN_W, LogW() - state.x);
-          state.h = Clamp(new_bottom - state.y - PANEL_TITLE_H, PANEL_MIN_H, LogH() - state.y - PANEL_TITLE_H);
-          // Recompute after resize
+          state.w = Clamp(new_right - state.x,
+                          PANEL_MIN_W, LogW() - state.x);
+          state.h = Clamp(new_bottom - state.y - PANEL_TITLE_H - tab_strip_h - bot_bar_h,
+                          PANEL_MIN_H, LogH() - state.y - PANEL_TITLE_H - tab_strip_h - bot_bar_h);
           viewport_h = state.h;
-          panel_h = PANEL_TITLE_H + viewport_h;
+          panel_h = PANEL_TITLE_H + tab_strip_h + viewport_h + bot_bar_h;
           needs_scroll = content_h > viewport_h + 1.f;
         }
         else
@@ -402,13 +487,13 @@ bool SkyeUI_Panel(const char *title,
       }
     }
 
-    // ---- Mouse-wheel scroll ----
-    if (CheckCollisionPointRec(GetMousePosition(), {state.x, state.y, state.w, panel_h}))
+    // ---- Mouse-wheel scroll (only over content viewport) ----
+    Rectangle scroll_zone = {state.x, content_top, state.w, viewport_h};
+    if (CheckCollisionPointRec(GetMousePosition(), scroll_zone))
       state.scroll.y += GetMouseWheelMove() * (item_h + ITEM_GAP) * 3.f;
   }
   else
   {
-    // Release any in-progress drag/resize if we lose input ownership
     state._dragging = false;
     state._resizing = false;
   }
@@ -428,21 +513,41 @@ bool SkyeUI_Panel(const char *title,
     closed = false;
   }
 
+  // ---- Tab strip ----
+  if (tabs && !tabs->empty())
+  {
+    std::string tab_str;
+    for (size_t i = 0; i < tabs->size(); ++i)
+    {
+      if (i)
+        tab_str += ';';
+      tab_str += (*tabs)[i];
+    }
+    int n = (int)tabs->size();
+    float strip_w = state.w - 2.f; // inset 1px each side for panel border
+    float tab_btn_w = strip_w / (float)n;
+    int saved_pad = GuiGetStyle(TOGGLE, GROUP_PADDING);
+    GuiSetStyle(TOGGLE, GROUP_PADDING, 0);
+    if (input_blocked)
+      GuiLock();
+    GuiToggleGroup({state.x + 1.f, state.y + PANEL_TITLE_H, tab_btn_w, TAB_H},
+                   tab_str.c_str(), &state.active_tab);
+    if (input_blocked)
+      GuiUnlock();
+    GuiSetStyle(TOGGLE, GROUP_PADDING, saved_pad);
+  }
+
   // ---- Items drawn clipped to viewport ----
   float items_x = state.x + PANEL_PADDING;
-  float items_y = state.y + PANEL_TITLE_H + PANEL_PADDING + state.scroll.y;
+  float items_y = content_top + PANEL_PADDING + state.scroll.y;
   float items_w = state.w - PANEL_PADDING * 2.f - (needs_scroll ? SCROLLBAR_W + 2.f : 0.f);
 
-  // Lock raygui input while mouse is outside the visible viewport so that
-  // items scrolled under the title bar (or outside the panel entirely) cannot
-  // receive clicks even though their raygui bounds still overlap those areas.
-  Rectangle vp_input = {state.x + 1.f, state.y + PANEL_TITLE_H + 1.f,
-                        state.w - 2.f, viewport_h - 2.f};
+  Rectangle vp_input = {state.x + 1.f, content_top + 1.f, state.w - 2.f, viewport_h - 2.f};
   bool mouse_outside_vp = input_blocked || !CheckCollisionPointRec(GetMousePosition(), vp_input);
   if (mouse_outside_vp)
     GuiLock();
 
-  BeginScissorModeLogical(state.x + 1.f, state.y + PANEL_TITLE_H + 1.f,
+  BeginScissorModeLogical(state.x + 1.f, content_top + 1.f,
                           state.w - 2.f, viewport_h - 2.f);
   SkyeUI_VerticalItemList(items, items_x, items_y, items_w, item_h);
   EndScissorMode();
@@ -454,26 +559,21 @@ bool SkyeUI_Panel(const char *title,
   if (needs_scroll)
   {
     float sb_x = state.x + state.w - SCROLLBAR_W - 2.f;
-    float sb_y = state.y + PANEL_TITLE_H + 2.f;
+    float sb_y = content_top + 2.f;
     float sb_h = viewport_h - 4.f;
 
-    float travel = content_h - viewport_h; // > 0 when scrollable
+    float travel = content_h - viewport_h;
     float vis_ratio = Clamp(viewport_h / content_h, 0.f, 1.f);
     float thumb_h = fmaxf(16.f, sb_h * vis_ratio);
-    float thumb_travel = sb_h - thumb_h; // pixels the thumb can slide
+    float thumb_travel = sb_h - thumb_h;
 
-    // Current thumb position from scroll state
     float frac = (travel > 0.f) ? Clamp((-state.scroll.y) / travel, 0.f, 1.f) : 0.f;
     float thumb_y = sb_y + thumb_travel * frac;
 
     Rectangle track_rect = {sb_x, sb_y, SCROLLBAR_W, sb_h};
     Rectangle thumb_rect = {sb_x + 1.f, thumb_y, SCROLLBAR_W - 2.f, thumb_h};
 
-    // ---- Thumb / track mouse interaction ----
     Vector2 mouse = GetMousePosition();
-
-    // Exclude the resize grip area so clicking the grip doesn't also fire
-    // a track-click that jumps the scrollbar.
     Rectangle grip_zone = {state.x + state.w - RESIZE_GRIP,
                            state.y + panel_h - RESIZE_GRIP,
                            RESIZE_GRIP, RESIZE_GRIP};
@@ -488,7 +588,6 @@ bool SkyeUI_Panel(const char *title,
       }
       else if (CheckCollisionPointRec(mouse, track_rect))
       {
-        // Click on track → jump so thumb centres on click point
         float new_frac = (thumb_travel > 0.f)
                              ? Clamp((mouse.y - thumb_h * 0.5f - sb_y) / thumb_travel, 0.f, 1.f)
                              : 0.f;
@@ -506,26 +605,46 @@ bool SkyeUI_Panel(const char *title,
         state.scroll.y = Clamp(-new_frac * travel, -travel, 0.f);
       }
       else
-      {
         state._scroll_dragging = false;
-      }
     }
 
-    // Recompute thumb_y after any drag adjustment
     frac = (travel > 0.f) ? Clamp((-state.scroll.y) / travel, 0.f, 1.f) : 0.f;
     thumb_y = sb_y + thumb_travel * frac;
 
-    // Track
     DrawRectangleRec(track_rect, GetColor(GuiGetStyle(DEFAULT, BACKGROUND_COLOR)));
-    // Thumb — brighter while dragging
     Color thumb_col = state._scroll_dragging
                           ? GetColor(GuiGetStyle(DEFAULT, BORDER_COLOR_PRESSED))
                           : GetColor(GuiGetStyle(DEFAULT, BORDER_COLOR_FOCUSED));
     DrawRectangleRec({sb_x + 1.f, thumb_y, SCROLLBAR_W - 2.f, thumb_h}, thumb_col);
   }
   else
+    state._scroll_dragging = false;
+
+  // ---- Bottom button bar ----
+  if (bottom && !bottom->empty())
   {
-    state._scroll_dragging = false; // reset if panel shrinks and no longer needs scroll
+    float bot_y = content_top + viewport_h;
+    float n = (float)bottom->size();
+    float pad = PANEL_PADDING;
+    float btn_w = (state.w - pad * (n + 1.f)) / n;
+    float btn_h = item_h;
+    float btn_y = bot_y + (bot_bar_h - btn_h) * 0.5f;
+    float btn_x = state.x + pad;
+
+    // Divider line above bottom bar
+    DrawLineEx({state.x + 1.f, bot_y}, {state.x + state.w - 1.f, bot_y},
+               1.f, GetColor(GuiGetStyle(DEFAULT, BORDER_COLOR_NORMAL)));
+
+    if (input_blocked)
+      GuiLock();
+    for (auto &btn : *bottom)
+    {
+      if (GuiButton({btn_x, btn_y, btn_w, btn_h}, btn.text.c_str()) && btn.onpress)
+        btn.onpress();
+      btn_x += btn_w + pad;
+    }
+    if (input_blocked)
+      GuiUnlock();
   }
 
   // ---- Resize grip triangle (visual affordance) ----
@@ -549,5 +668,5 @@ void SkyeUI_BeginFrame()
 
 void SkyeUI_DrawGUI()
 {
-  HUD_DrawGUI();
+  // HUD is driven by Lua (cs_hud.lua). Nothing to call here.
 }

@@ -6,6 +6,7 @@
 #include <net_utils.h>
 #include <bsp.h>
 #include <camera3d.h>
+#include <input_bindings.h>
 
 class Player : public GameObject3D
 {
@@ -63,21 +64,35 @@ handles mouse yaw and pitch
       }
     };
 
-    UpdateStack(KEY_W, vertical_stack);
-    UpdateStack(KEY_S, vertical_stack);
-    UpdateStack(KEY_D, horizontal_stack);
-    UpdateStack(KEY_A, horizontal_stack);
+    int key_fwd       = EngineInputCode("up",    KEY_W);
+    int key_back      = EngineInputCode("down",  KEY_S);
+    int key_right     = EngineInputCode("right", KEY_D);
+    int key_left      = EngineInputCode("left",  KEY_A);
+    int key_fwd_alt   = EngineInputCodeAlt("up");
+    int key_back_alt  = EngineInputCodeAlt("down");
+    int key_right_alt = EngineInputCodeAlt("right");
+    int key_left_alt  = EngineInputCodeAlt("left");
+
+    UpdateStack(key_fwd,   vertical_stack);
+    UpdateStack(key_back,  vertical_stack);
+    if (key_fwd_alt  > 0) UpdateStack(key_fwd_alt,  vertical_stack);
+    if (key_back_alt > 0) UpdateStack(key_back_alt, vertical_stack);
+
+    UpdateStack(key_right, horizontal_stack);
+    UpdateStack(key_left,  horizontal_stack);
+    if (key_right_alt > 0) UpdateStack(key_right_alt, horizontal_stack);
+    if (key_left_alt  > 0) UpdateStack(key_left_alt,  horizontal_stack);
 
     if (!horizontal_stack.empty())
     {
       int last_key = horizontal_stack.back();
-      direction.x = (last_key == KEY_D) ? 1.0f : -1.0f;
+      direction.x = (last_key == key_right || last_key == key_right_alt) ? 1.0f : -1.0f;
     }
 
     if (!vertical_stack.empty())
     {
       int last_key = vertical_stack.back();
-      direction.y = (last_key == KEY_W) ? 1.0f : -1.0f;
+      direction.y = (last_key == key_fwd || last_key == key_fwd_alt) ? 1.0f : -1.0f;
     }
 
     if (IsGamepadAvailable(0))

@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <memory>
 #include "rlgl.h"
+#include <input_bindings.h>
 
 inline std::unique_ptr<Camera> camera;
 inline long shader_mod_time;
@@ -78,15 +79,15 @@ inline void Camera3D_Move(Camera &camera, bool enabled)
   Vector3 forward = Vector3Normalize(Vector3Subtract(camera.target, camera.position));
   Vector3 right = Vector3Normalize(Vector3CrossProduct(forward, camera.up));
 
-  if (IsKeyDown(KEY_W))
+  if (EngineInputDown("up"))
     camera.position = Vector3Add(camera.position, Vector3Scale(forward, speed));
-  if (IsKeyDown(KEY_S))
+  if (EngineInputDown("down"))
     camera.position = Vector3Subtract(camera.position, Vector3Scale(forward, speed));
-  if (IsKeyDown(KEY_D))
+  if (EngineInputDown("right"))
     camera.position = Vector3Add(camera.position, Vector3Scale(right, speed));
-  if (IsKeyDown(KEY_A))
+  if (EngineInputDown("left"))
     camera.position = Vector3Subtract(camera.position, Vector3Scale(right, speed));
-  if (IsKeyDown(KEY_SPACE))
+  if (EngineInputDown("jump"))
     camera.position.y += speed;
   if (IsKeyDown(KEY_LEFT_CONTROL))
     camera.position.y -= speed;
@@ -112,10 +113,16 @@ inline void Camera3D_Move(Camera &camera, bool enabled)
 
 inline void PostProcess_CreateFBOs(int w, int h)
 {
-  pp_scene_fbo = LoadRenderTexture(w, h);
+  pp_scene_fbo   = LoadRenderTexture(w, h);
   pp_bloom_fbo_a = LoadRenderTexture(w / 2, h / 2);
   pp_bloom_fbo_b = LoadRenderTexture(w / 2, h / 2);
-  pp_gui_fbo = LoadRenderTexture(GUI_WIDTH, GUI_HEIGHT);
+  // GUI FBO is fixed at the render resolution (same as the scene FBO).
+  // DrawGUI stretches it to the game viewport rect just like the scene,
+  // so GUI and game always scale together regardless of window size.
+  pp_gui_fbo = LoadRenderTexture(w, h);
+  // Bilinear filter for the GUI FBO: it is stretched to fit the window
+  // (non-integer scale), so bilinear gives smoother results than point.
+  SetTextureFilter(pp_gui_fbo.texture, TEXTURE_FILTER_BILINEAR);
 }
 
 inline void PostProcess_DestroyFBOs()

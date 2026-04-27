@@ -19,7 +19,9 @@ enum MenuItemType
   MENUITEMTYPE_TOGGLE,      // GuiToggle          -> *value_b  -> onpress()
   MENUITEMTYPE_DROPDOWN,    // GuiDropdownBox     -> *value_i  -> onpress()  text = "A;B;C"
   MENUITEMTYPE_SPINNER,     // GuiSpinner         -> *value_i  -> onpress()
-  MENUITEMTYPE_TEXTBOX,     // GuiTextBox         -> value_s   (char buffer)
+  MENUITEMTYPE_TEXTBOX,        // GuiTextBox      -> value_s   (char buffer)
+  MENUITEMTYPE_KEYBIND,        // Selectable row  -> text=action, value_s=primary key, text2=alternate, value_b=selected
+  MENUITEMTYPE_KEYBIND_HEADER, // Header row      -> text="col1;col2;col3"
 };
 
 // ---------------------------------------------------------------------------
@@ -53,7 +55,8 @@ struct MenuItem
   //   DROPDOWN    -> semicolon-separated option list  e.g. "Low;Medium;High"
   //   SPINNER     -> left-side label
   //   TEXTBOX     -> optional left label (shrinks textbox to right side)
-  std::string text = "";
+  std::string text  = "";
+  std::string text2 = ""; // KEYBIND: alternate key name; KEYBIND_HEADER: unused (cols go in text)
 
   // Called when the control fires (click / confirm / value change)
   std::function<void()> onpress = nullptr;
@@ -94,6 +97,9 @@ struct PanelState
   float   h      = 0.f;         // 0 = auto; > 0 = fixed viewport height
   Vector2 scroll = {0.f, 0.f};
 
+  // Set by the tab strip — which tab is currently active (0-based).
+  int     active_tab = 0;
+
   // SkyeUI-managed drag/resize/scroll state — don't touch these.
   bool    _dragging         = false;
   bool    _resizing         = false;
@@ -122,15 +128,20 @@ void SkyeUI_VerticalItemList(std::vector<MenuItem> &items,
 
 // Draw a moveable, resizable, scrollable panel window.
 //   title  — title bar text
+//   items  — content items (the visible set; swap per active_tab in caller)
 //   state  — persistent position/size/scroll state (one static per panel)
 //   item_h — height of each item row
+//   tabs   — optional tab labels; pass nullptr for no tab strip
+//             state.active_tab is updated when the user clicks a tab
+//   bottom — optional bottom-bar buttons rendered as a horizontal row;
+//             pass nullptr for no bottom bar
 // Returns false when the X button was clicked (caller should hide the panel).
-// Note: open dropdowns are clipped to the panel viewport; make the panel
-//       tall enough to show them, or scroll to reveal the dropdown item.
-bool SkyeUI_Panel(const char            *title,
-                  std::vector<MenuItem> &items,
-                  PanelState            &state,
-                  float                  item_h);
+bool SkyeUI_Panel(const char*                      title,
+                  std::vector<MenuItem>&           items,
+                  PanelState&                      state,
+                  float                            item_h,
+                  const std::vector<std::string>*  tabs   = nullptr,
+                  std::vector<MenuItem>*           bottom = nullptr);
 
 // Top-level GUI entry point — called from DrawGUI() each frame.
 void SkyeUI_DrawGUI();
