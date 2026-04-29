@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <memory>
 #include "rlgl.h"
+#include "global.h"
 #include <input_bindings.h>
 
 inline std::unique_ptr<Camera> camera;
@@ -25,7 +26,6 @@ inline RenderTexture2D pp_gui_fbo;     // gui fbo
 inline float pp_bloom_threshold = 0.55f;
 inline float pp_bloom_knee = 0.3f;
 inline float pp_bloom_intensity = 1.5f;
-inline float pp_exposure = 0.3f;
 inline float pp_saturation = 1.3f;
 inline float pp_warmth = 0.2f;
 inline float pp_vignette_strength = 0.5f;
@@ -113,16 +113,11 @@ inline void Camera3D_Move(Camera &camera, bool enabled)
 
 inline void PostProcess_CreateFBOs(int w, int h)
 {
-  pp_scene_fbo   = LoadRenderTexture(w, h);
+  pp_scene_fbo = LoadRenderTexture(w, h);
   pp_bloom_fbo_a = LoadRenderTexture(w / 2, h / 2);
   pp_bloom_fbo_b = LoadRenderTexture(w / 2, h / 2);
-  // GUI FBO is fixed at the render resolution (same as the scene FBO).
-  // DrawGUI stretches it to the game viewport rect just like the scene,
-  // so GUI and game always scale together regardless of window size.
-  pp_gui_fbo = LoadRenderTexture(w, h);
-  // Bilinear filter for the GUI FBO: it is stretched to fit the window
-  // (non-integer scale), so bilinear gives smoother results than point.
-  SetTextureFilter(pp_gui_fbo.texture, TEXTURE_FILTER_BILINEAR);
+  // GUI FBO is managed separately by DrawGUI so it can track the live
+  // window size for 1:1 pixel rendering (no stretch, no blur).
 }
 
 inline void PostProcess_DestroyFBOs()
@@ -130,7 +125,7 @@ inline void PostProcess_DestroyFBOs()
   UnloadRenderTexture(pp_scene_fbo);
   UnloadRenderTexture(pp_bloom_fbo_a);
   UnloadRenderTexture(pp_bloom_fbo_b);
-  UnloadRenderTexture(pp_gui_fbo);
+  // pp_gui_fbo is managed separately by DrawGUI.
 }
 
 inline void PostProcess_SetUniforms()
@@ -141,7 +136,7 @@ inline void PostProcess_SetUniforms()
 
   // composite
   SetShaderValue(pp_composite, GetShaderLocation(pp_composite, "bloomIntensity"), &pp_bloom_intensity, SHADER_UNIFORM_FLOAT);
-  SetShaderValue(pp_composite, GetShaderLocation(pp_composite, "exposure"), &pp_exposure, SHADER_UNIFORM_FLOAT);
+  SetShaderValue(pp_composite, GetShaderLocation(pp_composite, "exposure"), &global_brightness, SHADER_UNIFORM_FLOAT);
   SetShaderValue(pp_composite, GetShaderLocation(pp_composite, "saturation"), &pp_saturation, SHADER_UNIFORM_FLOAT);
   SetShaderValue(pp_composite, GetShaderLocation(pp_composite, "warmth"), &pp_warmth, SHADER_UNIFORM_FLOAT);
   SetShaderValue(pp_composite, GetShaderLocation(pp_composite, "vignetteStrength"), &pp_vignette_strength, SHADER_UNIFORM_FLOAT);

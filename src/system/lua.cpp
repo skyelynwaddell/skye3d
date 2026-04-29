@@ -23,8 +23,9 @@ extern "C"
 #include <algorithm>
 
 #include "global.h"
+#include "cfg_parser.h"
 #include "input_bindings.h" // g_engine_bindings, EngineBinding, EBIND_KEY/MOUSE
-#include "skyeui.h" // SkyeUI_Panel, SkyeUI_VerticalItemList, MenuItem, PanelState
+#include "skyeui.h"         // SkyeUI_Panel, SkyeUI_VerticalItemList, MenuItem, PanelState
 #include "enet.h"
 #include "net_utils.h"
 #include "camera3d.h"
@@ -185,7 +186,7 @@ static void register_enums(sol::state &lua)
   mb["BACK"] = 6;
   // Virtual codes for scroll wheel — not real raylib buttons,
   // handled specially in btn_pressed / EngineInputPressed.
-  mb["WHEEL_UP"]   = 10;
+  mb["WHEEL_UP"] = 10;
   mb["WHEEL_DOWN"] = 11;
 
   // ---- PACKET_TYPE ----
@@ -239,22 +240,22 @@ static void register_enums(sol::state &lua)
     key[fkey] = 289 + i;
   }
   // Modifiers
-  key["GRAVE"]         = 96;   // ` / ~
-  key["LEFT_BRACKET"]  = 91;   // [
-  key["RIGHT_BRACKET"] = 93;   // ]
-  key["BACKSLASH"]     = 92;   // '\'
-  key["PAGE_UP"]       = 266;
-  key["PAGE_DOWN"]     = 267;
-  key["HOME"]          = 268;
-  key["END"]           = 269;
-  key["CAPS_LOCK"]     = 280;
-  key["PRINT_SCREEN"]  = 283;
-  key["LEFT_SHIFT"]    = 340;
-  key["LEFT_CONTROL"]  = 341;
-  key["LEFT_ALT"]      = 342;
-  key["RIGHT_SHIFT"]   = 344;
+  key["GRAVE"] = 96;         // ` / ~
+  key["LEFT_BRACKET"] = 91;  // [
+  key["RIGHT_BRACKET"] = 93; // ]
+  key["BACKSLASH"] = 92;     // '\'
+  key["PAGE_UP"] = 266;
+  key["PAGE_DOWN"] = 267;
+  key["HOME"] = 268;
+  key["END"] = 269;
+  key["CAPS_LOCK"] = 280;
+  key["PRINT_SCREEN"] = 283;
+  key["LEFT_SHIFT"] = 340;
+  key["LEFT_CONTROL"] = 341;
+  key["LEFT_ALT"] = 342;
+  key["RIGHT_SHIFT"] = 344;
   key["RIGHT_CONTROL"] = 345;
-  key["RIGHT_ALT"]     = 346;
+  key["RIGHT_ALT"] = 346;
 
   // ---- GAMEPAD_BUTTON ----
   sol::table gb = lua.create_named_table("GAMEPAD_BUTTON");
@@ -713,10 +714,106 @@ static void bind_globals(sol::state &lua, bool is_server)
                      { return GetScreenWidth(); });
     lua.set_function("get_screen_height", []()
                      { return GetScreenHeight(); });
+    lua.set_function("get_configured_width", []()
+                     { return SCREEN_WIDTH; });
+    lua.set_function("get_configured_height", []()
+                     { return SCREEN_HEIGHT; });
     lua.set_function("get_render_width", []()
                      { return GetRenderWidth(); });
     lua.set_function("get_render_height", []()
                      { return GetRenderHeight(); });
+
+    // --- video ---
+
+    // Brightness: maps directly to the post-process exposure uniform.
+    // 0.0 = black, 0.3 = default, 1.0+ = very bright.
+    lua.set_function("set_brightness", [](float newval)
+                     {
+                      global_brightness = newval;
+      PostProcess_SetUniforms(); 
+    CFG_SaveSettings(); });
+
+    // Window mode: 0 = windowed, 1 = fullscreen, 2 = borderless windowed.
+    lua.set_function("set_window_mode", [](int newval)
+                     {
+      global_window_mode = newval;
+      HandleWindowMode();
+      CFG_SaveSettings(); });
+
+    // Vsync: saved to config (takes full effect on restart).
+    // Also attempts a runtime swap-interval toggle where supported.
+    lua.set_function("set_vsync", [](bool newval)
+                     {
+      global_vsync = newval;
+      if (newval)
+        SetWindowState(FLAG_VSYNC_HINT);
+      else
+        ClearWindowState(FLAG_VSYNC_HINT);
+      CFG_SaveSettings(); });
+
+    // MSAA 4x requires window recreation — save only, apply on restart.
+    lua.set_function("set_msaa4x", [](bool newval)
+                     {
+      global_msaa4x = newval;
+      CFG_SaveSettings(); });
+
+    // Texture filter: re-applies to every loaded BSP texture immediately.
+    lua.set_function("set_texture_filter", [](int newval)
+                     {
+      global_texture_filter = newval;
+      bsp_renderer.texture_filter = newval;
+      for (auto &[name, tex] : bsp_renderer.textures)
+        SetTextureFilter(tex, newval);
+      CFG_SaveSettings(); });
+
+    // Window size: accepts "WxH" string, e.g. "1920x1080".
+    lua.set_function("set_window_size", [](const std::string &newval)
+                     {
+      size_t x = newval.find('x');
+      if (x == std::string::npos) return;
+      int w = std::stoi(newval.substr(0, x));
+      int h = std::stoi(newval.substr(x + 1));
+      if (w <= 0 || h <= 0) return;
+      SCREEN_WIDTH  = w;
+      SCREEN_HEIGHT = h;
+      RENDER_WIDTH = w;
+      RENDER_HEIGHT = h;
+      SetWindowSize(w, h);
+      CFG_SaveSettings(); });
+
+    lua.set_function("set_gui_scale", [](float newval)
+                     { global_guiscale = newval; });
+
+    // FOV: applied to the active camera immediately.
+    lua.set_function("set_fov", [](int newval)
+                     {
+      global_fov = newval;
+      if (camera)
+        camera->fovy = (float)newval;
+      CFG_SaveSettings(); });
+
+    lua.set_function("quit_game", []()
+                     { global_game_running = false; });
+
+    // Getters so Lua UI can read current video settings on open.
+    lua.set_function("get_brightness", []()
+                     { return global_brightness; });
+    lua.set_function("get_window_mode", []()
+                     { return global_window_mode; });
+    lua.set_function("get_vsync", []()
+                     { return global_vsync; });
+    lua.set_function("get_msaa4x", []()
+                     { return global_msaa4x; });
+    lua.set_function("get_texture_filter", []()
+                     { return global_texture_filter; });
+    lua.set_function("get_fov", []()
+                     { return global_fov; });
+    lua.set_function("get_gui_scale", []()
+                     { return global_guiscale; });
+
+    // Explicit save (call from Apply button if you want deferred saving).
+    lua.set_function("save_settings", []()
+                     { CFG_SaveSettings(); });
 
     // --- rtext ---
     lua.set_function("load_font", [](const std::string &path, int size)
@@ -857,7 +954,9 @@ static void bind_globals(sol::state &lua, bool is_server)
 
   // --- timing ---
   lua.set_function("set_target_fps", [](int fps)
-                   { SetTargetFPS(fps); });
+                   { global_target_fps = fps; SetTargetFPS(fps); });
+  lua.set_function("get_target_fps", []()
+                   { return global_target_fps; });
   lua.set_function("get_frame_time", []()
                    { return (double)GetFrameTime(); });
   lua.set_function("get_time", []()
@@ -927,7 +1026,7 @@ struct LuaMenuItem
   float value_f = 0.f;
   bool value_b = false;
   int value_i = 0;
-  float min_f = 0.f, max_f = 1.f;
+  float min_f = 0.f, max_f = 1.f, step_f = 0.1f;
   int min_i = 0, max_i = 100;
 
   // Textbox char buffer (exposed in Lua as value_s string property).
@@ -939,6 +1038,8 @@ struct LuaMenuItem
 
   // raygui edit state for dropdown / spinner / textbox — must survive frames.
   bool _edit = false;
+  // SPINNERF: persistent text buffer so typed text survives frame rebuilds.
+  char _spinnerf_buf[32] = {};
 };
 
 // Build a temporary std::vector<MenuItem> that points into the LuaMenuItem
@@ -960,13 +1061,15 @@ lua_build_items(sol::table &tbl, std::vector<LuaMenuItem *> &out_ptrs)
   for (LuaMenuItem *li : out_ptrs)
   {
     MenuItem m;
-    m.type  = static_cast<MenuItemType>(li->type);
-    m.text  = li->text;
+    m.type = static_cast<MenuItemType>(li->type);
+    m.text = li->text;
     m.text2 = li->text2;
     m.min_f = li->min_f;
     m.max_f = li->max_f;
+    m.step_f = li->step_f;
     m.min_i = li->min_i;
     m.max_i = li->max_i;
+    m._spinnerf_buf = li->_spinnerf_buf;
     m.buf_size = li->buf_size;
     m._edit = li->_edit;
     // Pointer directly into the LuaMenuItem — raygui writes through these.
@@ -1014,8 +1117,9 @@ static void register_skyeui(sol::state &lua)
   menu["TOGGLE"] = (int)MENUITEMTYPE_TOGGLE;
   menu["DROPDOWN"] = (int)MENUITEMTYPE_DROPDOWN;
   menu["SPINNER"] = (int)MENUITEMTYPE_SPINNER;
-  menu["TEXTBOX"]        = (int)MENUITEMTYPE_TEXTBOX;
-  menu["KEYBIND"]        = (int)MENUITEMTYPE_KEYBIND;
+  menu["SPINNERF"] = (int)MENUITEMTYPE_SPINNERF;
+  menu["TEXTBOX"] = (int)MENUITEMTYPE_TEXTBOX;
+  menu["KEYBIND"] = (int)MENUITEMTYPE_KEYBIND;
   menu["KEYBIND_HEADER"] = (int)MENUITEMTYPE_KEYBIND_HEADER;
 
   // ---- MenuItem usertype ----
@@ -1043,6 +1147,7 @@ static void register_skyeui(sol::state &lua)
 
       "min_f", &LuaMenuItem::min_f,
       "max_f", &LuaMenuItem::max_f,
+      "step_f", &LuaMenuItem::step_f,
       "min_i", &LuaMenuItem::min_i,
       "max_i", &LuaMenuItem::max_i,
       "buf_size", &LuaMenuItem::buf_size);
@@ -1052,10 +1157,10 @@ static void register_skyeui(sol::state &lua)
       "PanelState",
       "new", sol::factories([]()
                             { return PanelState{}; }),
-      "x",          &PanelState::x,
-      "y",          &PanelState::y,
-      "w",          &PanelState::w,
-      "h",          &PanelState::h,
+      "x", &PanelState::x,
+      "y", &PanelState::y,
+      "w", &PanelState::w,
+      "h", &PanelState::h,
       "active_tab", &PanelState::active_tab);
 
   // ---- ui_panel(title, items, state, item_h [, tabs [, bottom]]) -> bool ----
@@ -1085,19 +1190,20 @@ static void register_skyeui(sol::state &lua)
 
                      // ---- bottom bar (optional) ----
                      std::vector<LuaMenuItem *> bot_ptrs;
-                     std::vector<MenuItem>       cpp_bot;
-                     std::vector<MenuItem>       *bot_ptr = nullptr;
+                     std::vector<MenuItem> cpp_bot;
+                     std::vector<MenuItem> *bot_ptr = nullptr;
                      if (bottom_opt)
                      {
-                       cpp_bot  = lua_build_items(*bottom_opt, bot_ptrs);
-                       bot_ptr  = &cpp_bot;
+                       cpp_bot = lua_build_items(*bottom_opt, bot_ptrs);
+                       bot_ptr = &cpp_bot;
                      }
 
                      bool open = SkyeUI_Panel(title, cpp_items, state, item_h,
                                               tabs_ptr, bot_ptr);
 
                      lua_sync_items(cpp_items, item_ptrs);
-                     if (bot_ptr) lua_sync_items(cpp_bot, bot_ptrs);
+                     if (bot_ptr)
+                       lua_sync_items(cpp_bot, bot_ptrs);
                      return open;
                    });
 

@@ -1000,7 +1000,7 @@ builds sections (clusters) of models seperated up for better lookup when culling
       {
         batch.shader = sky_shader;
         SetTextureWrap(batch.texture, TEXTURE_WRAP_REPEAT);
-        SetTextureFilter(batch.texture, TEXTURE_FILTER_BILINEAR);
+        SetTextureFilter(batch.texture, global_texture_filter);
       }
       else if (is_invisible)
         batch.shader = invisible_shader;
@@ -1154,7 +1154,7 @@ builds sections (clusters) of models seperated up for better lookup when culling
           };
           textures[texname] = LoadTextureFromImage(texture_image);
           GenTextureMipmaps(&textures[texname]);
-          SetTextureFilter(textures[texname], texture_filter);
+          SetTextureFilter(textures[texname], global_texture_filter);
         }
       }
     }

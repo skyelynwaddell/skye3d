@@ -4,9 +4,11 @@
 #include <gameobject3d.h>
 #include <bsp.h>
 
-// Track window size for FBO recreation
-static int lastscreenw = 0;
-static int lastscreenh = 0;
+// Track window size for FBO recreation.
+// Start at -1 so the handler fires on the very first frame and initialises
+// the GUI FBO at the correct viewport size before DrawGUI runs.
+static int lastscreenw = -1;
+static int lastscreenh = -1;
 
 void Draw()
 {
@@ -25,6 +27,22 @@ void Draw()
   {
     PostProcess_DestroyFBOs();
     PostProcess_CreateFBOs(RENDER_WIDTH, RENDER_HEIGHT);
+
+    // GUI FBO tracks the game viewport (letterbox) size so it can be blitted
+    // at 1:1 — no scaling, no blur, can't reach the black bars.
+    float s = fminf((float)curw / RENDER_WIDTH, (float)curh / RENDER_HEIGHT);
+    int vpw = (int)(RENDER_WIDTH  * s);
+    int vph = (int)(RENDER_HEIGHT * s);
+    if (pp_gui_fbo.id != 0)
+      UnloadRenderTexture(pp_gui_fbo);
+    pp_gui_fbo = LoadRenderTexture(vpw, vph);
+    SetTextureFilter(pp_gui_fbo.texture, TEXTURE_FILTER_POINT);
+
+    // Keep GUI_WIDTH/HEIGHT in sync with the viewport so SkyeUI's drag
+    // clamping (LogW/LogH) uses the real available space, not the config value.
+    GUI_WIDTH  = (float)vpw;
+    GUI_HEIGHT = (float)vph;
+
     lastscreenw = curw;
     lastscreenh = curh;
   }

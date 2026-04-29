@@ -19,6 +19,7 @@ enum MenuItemType
   MENUITEMTYPE_TOGGLE,      // GuiToggle          -> *value_b  -> onpress()
   MENUITEMTYPE_DROPDOWN,    // GuiDropdownBox     -> *value_i  -> onpress()  text = "A;B;C"
   MENUITEMTYPE_SPINNER,     // GuiSpinner         -> *value_i  -> onpress()
+  MENUITEMTYPE_SPINNERF,    // float spinner      -> *value_f  -> onpress()  step_f controls increment
   MENUITEMTYPE_TEXTBOX,        // GuiTextBox      -> value_s   (char buffer)
   MENUITEMTYPE_KEYBIND,        // Selectable row  -> text=action, value_s=primary key, text2=alternate, value_b=selected
   MENUITEMTYPE_KEYBIND_HEADER, // Header row      -> text="col1;col2;col3"
@@ -71,12 +72,14 @@ struct MenuItem
   // Numeric ranges
   float min_f = 0.0f;
   float max_f = 1.0f;
+  float step_f = 0.1f;   // SPINNERF: increment per +/- button click
   int min_i = 0;
   int max_i = 100;
 
-  // SkyeUI-managed edit state for DROPDOWN / SPINNER / TEXTBOX.
+  // SkyeUI-managed edit state for DROPDOWN / SPINNER / TEXTBOX / SPINNERF.
   // You don't need to touch this.
   bool _edit = false;
+  char *_spinnerf_buf = nullptr; // SPINNERF: pointer to external 32-byte buffer (set by lua binding)
 };
 
 // ---------------------------------------------------------------------------
@@ -123,8 +126,13 @@ void SkyeUI_BeginFrame();
 //   x, y  — top-left origin
 //   w, h  — width and item-row height (separators use a fixed 10 px)
 // Pass items by reference so _edit state persists between frames.
+// clip_bottom: logical Y the open dropdown must not extend past (0 = no limit).
+// When non-zero, SkyeUI_VerticalItemList calls EndScissorMode() before drawing
+// the open dropdown so it renders unclipped; the caller's EndScissorMode()
+// then becomes a harmless no-op.
 void SkyeUI_VerticalItemList(std::vector<MenuItem> &items,
-                             float x, float y, float w, float h);
+                             float x, float y, float w, float h,
+                             float clip_bottom = 0.f);
 
 // Draw a moveable, resizable, scrollable panel window.
 //   title  — title bar text

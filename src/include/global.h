@@ -32,3 +32,14 @@ inline int spawned_instance_id = 200000;
 // RL_TEXTURE_FILTER_ANISOTROPIC_8X = 4,   // Anisotropic filtering 8x
 // RL_TEXTURE_FILTER_ANISOTROPIC_16X = 5,  // Anisotropic filtering 16x
 inline int global_texture_filter = 2;
+inline float global_guiscale = 2.0f;
+
+// video settings (persisted to settings.cfg)
+// window_mode: 0 = windowed, 1 = fullscreen, 2 = borderless windowed
+inline int global_window_mode = 0;
+inline bool global_vsync = true;
+inline bool global_msaa4x = true;
+inline int global_fov = 90;
+inline float global_brightness = 0.3f;
+inline bool global_game_running = true;
+inline int global_target_fps = 60;

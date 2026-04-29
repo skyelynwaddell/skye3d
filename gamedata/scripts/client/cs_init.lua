@@ -1,6 +1,7 @@
 -- cs_init.lua
 function init()
   print("\n\n ### CS INIT CALLED ###")
+  load_font("gamedata/fonts/russo_one.ttf", 64)
   cs_get_player_count()
 end
 
@@ -10,6 +11,6 @@ end
 -- pairs from the BSP entity.
 function info_player_start(self, origin, tags)
   print("INFO_PLAYER_SPAWN : spawned at "
-        .. origin.x .. " " .. origin.y .. " " .. origin.z)
+    .. origin.x .. " " .. origin.y .. " " .. origin.z)
   -- tags.targetname, tags.angle, etc. all available
 end

@@ -12,13 +12,15 @@ void Init()
   CFG_LoadSettings();
 
   SetTargetFPS(60);
-  SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT | FLAG_WINDOW_RESIZABLE);
-  InitWindow(1200, 800, global_window_title.c_str());
-  SetWindowState(FLAG_WINDOW_MAXIMIZED);
+  SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
+
+  InitWindow(1280, 720, global_window_title.c_str());
   rlEnableBackfaceCulling();
   rlImGuiSetup(false);
   CharacterShader_Init();
   SkyeUI_Init();
+
+  HandleWindowMode();
 
   SetExitKey(KEY_NULL);
 

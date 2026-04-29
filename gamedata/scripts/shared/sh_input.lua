@@ -133,7 +133,69 @@ function reset_bindings_to_defaults()
     }
   end
 end
+
+-- ============================================================
+--  Bindings persistence  (gamedata/bindings.cfg)
+--
+--  Format — one flat key=value per line, e.g.:
+--    up_type=key
+--    up_code=87
+--    up_disp=W
+--    up_atype=key
+--    up_acode=38
+--    up_adisp=Up
+-- ============================================================
+local BINDINGS_FILE = "gamedata/bindings.cfg"
+
+function save_bindings()
+  local f = io.open(BINDINGS_FILE, "w")
+  if not f then
+    print("[bindings] ERROR: could not write " .. BINDINGS_FILE)
+    return
+  end
+  f:write("# Keybindings — auto-generated\n")
+  for bkey, b in pairs(BINDINGS) do
+    f:write(bkey .. "_type="  .. tostring(b.type        or "key") .. "\n")
+    f:write(bkey .. "_code="  .. tostring(b.code        or -1)    .. "\n")
+    f:write(bkey .. "_disp="  .. tostring(b.display     or "")    .. "\n")
+    f:write(bkey .. "_atype=" .. tostring(b.alt_type    or "key") .. "\n")
+    f:write(bkey .. "_acode=" .. tostring(b.alt_code    or -1)    .. "\n")
+    f:write(bkey .. "_adisp=" .. tostring(b.alt_display or "")    .. "\n")
+  end
+  f:close()
+end
+
+-- Load saved bindings on top of whatever is currently in BINDINGS.
+-- Safe to call before set_engine_binding (client init loop handles that).
+function load_bindings()
+  local f = io.open(BINDINGS_FILE, "r")
+  if not f then return end  -- no save file yet — keep defaults
+  local data = {}
+  for line in f:lines() do
+    if line:sub(1, 1) ~= "#" and line ~= "" then
+      local k, v = line:match("^([^=]+)=(.*)$")
+      if k then data[k] = v end
+    end
+  end
+  f:close()
+  for bkey, b in pairs(BINDINGS) do
+    local t  = data[bkey .. "_type"]
+    local c  = data[bkey .. "_code"]
+    local d  = data[bkey .. "_disp"]
+    local at = data[bkey .. "_atype"]
+    local ac = data[bkey .. "_acode"]
+    local ad = data[bkey .. "_adisp"]
+    if t  then b.type        = t                  end
+    if c  then b.code        = tonumber(c) or -1  end
+    if d  then b.display     = d                  end
+    if at then b.alt_type    = at                 end
+    if ac then b.alt_code    = tonumber(ac) or -1 end
+    if ad then b.alt_display = ad                 end
+  end
+end
+
 reset_bindings_to_defaults()
+load_bindings()   -- overlay persisted bindings on top of defaults
 
 -- ============================================================
 --  Gamepad constants

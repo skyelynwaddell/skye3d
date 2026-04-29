@@ -2,6 +2,8 @@
 #include "skyeui.h"
 #include <engine.h>
 #include <raymath.h>
+#include <cstdio>
+#include <cstdlib>
 
 // ============================================================
 //  Layout constants
@@ -16,7 +18,7 @@ static constexpr float PANEL_TITLE_H = 24.0f; // height of the panel title bar
 // ============================================================
 void SkyeUI_Init()
 {
-  GuiLoadStyle("src/lib/raygui/styles/custom/skyeblue2.rgs");
+  GuiLoadStyle("src/lib/raygui/styles/custom/purple.rgs");
   // Leave the font texture at the default BILINEAR filter.
   // Raygui centres text with float math so glyphs often land at fractional
   // pixel positions inside the FBO.  Point filtering would snap those
@@ -49,6 +51,26 @@ static int s_panel_draw_idx = 0;  // incremented per SkyeUI_Panel call, reset ea
 static int s_top_panel_prev = -1; // topmost index that had the mouse, last frame
 static int s_top_panel_this = -1; // being built this frame
 
+// Pointer to the value_i of the dropdown that was just opened.
+// Sub-pass B skips rendering for one frame after opening so the mouse-release
+// from the opening click cannot immediately select the hovered item.
+static int *s_dd_suppress = nullptr;
+
+// Deferred open dropdown — populated by SkyeUI_VerticalItemList sub-pass B,
+// consumed by SkyeUI_Panel after the bottom bar so it renders on top of
+// all panel chrome (title bar, tab strip, bottom buttons, etc.).
+struct DeferredDropdown
+{
+  bool active = false;
+  float x = 0, y = 0, w = 0, h = 0;
+  std::string text;
+  int *value_i = nullptr;
+  bool *edit = nullptr; // pointer to item._edit
+  std::function<void()> onpress;
+  bool suppress = false;
+};
+static DeferredDropdown s_deferred_dd;
+
 // True for controls that render their text as a GuiLabel ABOVE the widget
 // rather than inline to the left via raygui's textLeft parameter.
 static bool HasTopLabel(const MenuItem &item)
@@ -57,7 +79,8 @@ static bool HasTopLabel(const MenuItem &item)
          (item.type == MENUITEMTYPE_SLIDER ||
           item.type == MENUITEMTYPE_SLIDERBAR ||
           item.type == MENUITEMTYPE_PROGRESSBAR ||
-          item.type == MENUITEMTYPE_SPINNER);
+          item.type == MENUITEMTYPE_SPINNER ||
+          item.type == MENUITEMTYPE_SPINNERF);
 }
 
 // Total vertical space consumed by one item row (used for layout + panel sizing)
@@ -77,7 +100,8 @@ static float ItemHeight(const MenuItem &item, float row_h)
 //  of the items below them (raygui dropdowns expand downward).
 // ============================================================
 void SkyeUI_VerticalItemList(std::vector<MenuItem> &items,
-                             float x, float y, float w, float h)
+                             float x, float y, float w, float h,
+                             float clip_bottom)
 {
   // ---- Pre-compute each item's top-left Y so both passes share positions ----
   std::vector<float> ys;
@@ -237,6 +261,57 @@ void SkyeUI_VerticalItemList(std::vector<MenuItem> &items,
       break;
 
     // -------------------------------------------------------
+    case MENUITEMTYPE_SPINNERF:
+      if (item.value_f)
+      {
+        if (HasTopLabel(item))
+          GuiLabel({x, iy, w, LABEL_H}, item.text.c_str());
+        float cy = iy + (HasTopLabel(item) ? LABEL_H : 0.f);
+
+        float btn_w = h; // square - and + buttons
+        Rectangle left_btn = {x, cy, btn_w, h};
+        Rectangle text_rect = {x + btn_w, cy, w - btn_w * 2.f, h};
+        Rectangle right_btn = {x + w - btn_w, cy, btn_w, h};
+
+        // Sync text buffer from value whenever we're not actively editing
+        if (!item._edit)
+          snprintf(item._spinnerf_buf, sizeof(item._spinnerf_buf), "%g", *item.value_f);
+
+        // - button
+        if (GuiButton(left_btn, "-"))
+        {
+          item._edit = false;
+          *item.value_f = Clamp(*item.value_f - item.step_f, item.min_f, item.max_f);
+          if (item.onpress)
+            item.onpress();
+        }
+        // + button
+        if (GuiButton(right_btn, "+"))
+        {
+          item._edit = false;
+          *item.value_f = Clamp(*item.value_f + item.step_f, item.min_f, item.max_f);
+          if (item.onpress)
+            item.onpress();
+        }
+        // Text box (click to type a value directly)
+        if (GuiTextBox(text_rect, item._spinnerf_buf, (int)sizeof(item._spinnerf_buf), item._edit))
+        {
+          item._edit = !item._edit;
+          if (!item._edit)
+          {
+            // Parse on commit (click outside or press Enter)
+            char *end = nullptr;
+            float parsed = strtof(item._spinnerf_buf, &end);
+            if (end != item._spinnerf_buf)
+              *item.value_f = Clamp(parsed, item.min_f, item.max_f);
+            if (item.onpress)
+              item.onpress();
+          }
+        }
+      }
+      break;
+
+    // -------------------------------------------------------
     case MENUITEMTYPE_TEXTBOX:
       if (item.value_s)
       {
@@ -343,24 +418,33 @@ void SkyeUI_VerticalItemList(std::vector<MenuItem> &items,
         items[j]._edit = false;
       item._edit = true;
       just_opened = i;
+      // Mark this dropdown for release-suppression: sub-pass B will lock the GUI
+      // for the first frame it renders the open list, preventing the mouse-release
+      // from the opening click from immediately selecting whatever item is under
+      // the cursor.
+      s_dd_suppress = item.value_i;
     }
   }
   if (!was_locked && any_open)
     GuiUnlock();
 
-  // Sub-pass B — the one open dropdown, rendered on top, fully interactive
+  // Sub-pass B — defer the one open dropdown to s_deferred_dd.
+  // SkyeUI_Panel will render it AFTER the bottom bar so it draws on top of
+  // all panel chrome.  We do NOT call EndScissorMode here — the panel's own
+  // EndScissorMode call (right after SkyeUI_VerticalItemList) handles that.
   for (size_t i : dropdowns)
   {
     auto &item = items[i];
     if (!item._edit || !item.value_i || i == just_opened)
       continue;
 
-    if (GuiDropdownBox({x, ys[i], w, h}, item.text.c_str(), item.value_i, true))
-    {
-      item._edit = false;
-      if (item.onpress)
-        item.onpress();
-    }
+    bool suppress = (s_dd_suppress != nullptr && item.value_i == s_dd_suppress);
+    s_dd_suppress = nullptr; // consume
+
+    s_deferred_dd = {true, x, ys[i], w, h,
+                     item.text, item.value_i, &item._edit, item.onpress,
+                     suppress};
+    break; // only one open at a time
   }
 }
 
@@ -547,10 +631,11 @@ bool SkyeUI_Panel(const char *title,
   if (mouse_outside_vp)
     GuiLock();
 
+  s_deferred_dd.active = false; // clear any stale deferred dd before this panel's list runs
   BeginScissorModeLogical(state.x + 1.f, content_top + 1.f,
                           state.w - 2.f, viewport_h - 2.f);
   SkyeUI_VerticalItemList(items, items_x, items_y, items_w, item_h);
-  EndScissorMode();
+  EndScissorMode(); // end the scissor; sub-pass B no longer calls this
 
   if (mouse_outside_vp)
     GuiUnlock();
@@ -579,7 +664,7 @@ bool SkyeUI_Panel(const char *title,
                            RESIZE_GRIP, RESIZE_GRIP};
     bool over_grip = CheckCollisionPointRec(mouse, grip_zone);
 
-    if (!input_blocked && !state._resizing && !over_grip && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+    if (!input_blocked && !s_deferred_dd.active && !state._resizing && !over_grip && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
     {
       if (CheckCollisionPointRec(mouse, thumb_rect))
       {
@@ -595,7 +680,7 @@ bool SkyeUI_Panel(const char *title,
       }
     }
 
-    if (!input_blocked && state._scroll_dragging)
+    if (!input_blocked && !s_deferred_dd.active && state._scroll_dragging)
     {
       if (IsMouseButtonDown(MOUSE_BUTTON_LEFT))
       {
@@ -635,7 +720,7 @@ bool SkyeUI_Panel(const char *title,
     DrawLineEx({state.x + 1.f, bot_y}, {state.x + state.w - 1.f, bot_y},
                1.f, GetColor(GuiGetStyle(DEFAULT, BORDER_COLOR_NORMAL)));
 
-    if (input_blocked)
+    if (input_blocked || s_deferred_dd.active)
       GuiLock();
     for (auto &btn : *bottom)
     {
@@ -643,7 +728,7 @@ bool SkyeUI_Panel(const char *title,
         btn.onpress();
       btn_x += btn_w + pad;
     }
-    if (input_blocked)
+    if (input_blocked || s_deferred_dd.active)
       GuiUnlock();
   }
 
@@ -652,6 +737,33 @@ bool SkyeUI_Panel(const char *title,
   float gy = state.y + panel_h;
   Color grip_col = GetColor(GuiGetStyle(DEFAULT, BORDER_COLOR_NORMAL));
   DrawTriangle({gx - RESIZE_GRIP, gy}, {gx, gy}, {gx, gy - RESIZE_GRIP}, grip_col);
+
+  // ---- Deferred open dropdown — rendered last so it draws on top of all
+  //      panel chrome (bottom bar, title bar, tab strip, resize grip).
+  //      We also temporarily unlock so raygui processes clicks even if the
+  //      mouse has drifted outside the viewport rect.
+  if (s_deferred_dd.active)
+  {
+    s_deferred_dd.active = false;
+    if (!s_deferred_dd.suppress)
+    {
+      bool was_locked = GuiIsLocked();
+      if (was_locked)
+        GuiUnlock();
+      if (GuiDropdownBox({s_deferred_dd.x, s_deferred_dd.y,
+                          s_deferred_dd.w, s_deferred_dd.h},
+                         s_deferred_dd.text.c_str(),
+                         s_deferred_dd.value_i, true))
+      {
+        if (s_deferred_dd.edit)
+          *s_deferred_dd.edit = false;
+        if (s_deferred_dd.onpress)
+          s_deferred_dd.onpress();
+      }
+      if (was_locked)
+        GuiLock();
+    }
+  }
 
   return !closed;
 }

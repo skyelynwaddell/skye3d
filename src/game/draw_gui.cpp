@@ -10,17 +10,18 @@ void DrawGUI()
   int sw = GetScreenWidth();
   int sh = GetScreenHeight();
 
-  // Identical letterbox calculation to draw.cpp — GUI stretches to fill
-  // the same rect as the 3D scene so they always scale together.
-  float scale = fminf((float)sw / RENDER_WIDTH, (float)sh / RENDER_HEIGHT);
-  float destw = RENDER_WIDTH * scale;
-  float desth = RENDER_HEIGHT * scale;
-  float destx = (sw - destw) / 2.0f;
-  float desty = (sh - desth) / 2.0f;
-
   if (global_guiscale <= 0.001f)
     global_guiscale = 1.0f;
 
+  // Game viewport rect — same letterbox formula as draw.cpp.
+  float scale = fminf((float)sw / RENDER_WIDTH, (float)sh / RENDER_HEIGHT);
+  int vpw = (int)(RENDER_WIDTH  * scale);
+  int vph = (int)(RENDER_HEIGHT * scale);
+  float destx = (sw - vpw) / 2.0f;
+  float desty = (sh - vph) / 2.0f;
+
+  // pp_gui_fbo is recreated by Draw() whenever the window changes size,
+  // so it always matches the current game viewport exactly.
   BeginTextureMode(pp_gui_fbo);
   ClearBackground(BLANK);
   rlPushMatrix();
@@ -32,14 +33,11 @@ void DrawGUI()
   }
   else
   {
-    // Map window mouse coords → logical GUI space:
-    //   1. Subtract destx/y so coords are relative to the game viewport.
-    //   2. Multiply by (FBO size / dest size) to reach FBO pixel space.
-    //   3. Divide by guiscale to reach pre-scale logical GUI coords.
-    float scaleX = (float)pp_gui_fbo.texture.width / (destw * global_guiscale);
-    float scaleY = (float)pp_gui_fbo.texture.height / (desth * global_guiscale);
+    // Map window mouse → FBO space:
+    //   subtract viewport origin so coords are relative to the game area,
+    //   then divide by guiscale to reach the pre-scale logical GUI coords.
     SetMouseOffset(-destx, -desty);
-    SetMouseScale(scaleX, scaleY);
+    SetMouseScale(1.0f / global_guiscale, 1.0f / global_guiscale);
   }
 
   /// DRAW ---------------------------
@@ -57,13 +55,11 @@ void DrawGUI()
   rlPopMatrix();
   EndTextureMode();
 
-  // Stretch the GUI FBO to the game viewport — identical to how draw.cpp
-  // blits the scene, so GUI and game always occupy exactly the same area.
+  // Blit GUI at 1:1, positioned at the game viewport origin — no scaling, no blur.
   BeginBlendMode(BLEND_ALPHA);
-  DrawTexturePro(pp_gui_fbo.texture,
-                 {0, 0, (float)RENDER_WIDTH, (float)-RENDER_HEIGHT},
-                 {destx, desty, destw, desth},
-                 {0, 0}, 0.0f, WHITE);
+  DrawTextureRec(pp_gui_fbo.texture,
+                 {0, 0, (float)vpw, (float)-vph},
+                 {destx, desty}, WHITE);
   EndBlendMode();
 
   EndDrawing();
