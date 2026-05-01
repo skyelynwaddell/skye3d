@@ -35,6 +35,16 @@ inline float SLOPE_MAX = 0.4f;      // max slope angle we can walk up
 inline float SLOPE_BOOST = 0.7f;    // allows so we arent inching up slopes
 inline float UNCLIP_DIST = 0.03125; // little distance to unclip from walls and yeah
 
+// Forward-declared so TraceResult can hold a hit pointer without a circular include.
+struct GameObject3D;
+
+// Tiny accessor shims — defined inline in gameobject3d.h after GameObject3D
+// is complete. Lets non-template code in bsp.h read/write GameObject3D fields
+// without needing the full type here.
+inline bool GO_BlocksHitscan(const GameObject3D *o);
+inline int  GO_WallbangStrength(const GameObject3D *o);
+inline void GO_SetBlocksHitscan(GameObject3D *o, bool v);
+
 /*
  TraceResult
  result of a single hull-trace through the BSP clipnode tree
@@ -45,6 +55,18 @@ struct TraceResult
   Vector3 normal = {0, 0, 0}; // surface normal at impact, in raylib space
   bool started_solid = false; // origin was already inside solid
   bool all_solid = false;     // entire trace was inside solid
+
+  // What was hit. Resolved by TraceLine / TraceAll on GameObject3D.
+  enum class HitType : uint8_t
+  {
+    None,
+    World,
+    BrushEntity,
+    Object
+  } hit_type = HitType::None;
+  // Non-null when hit_type == BrushEntity or Object.
+  // Cast to the concrete subclass if you need subclass fields.
+  GameObject3D *hit_object = nullptr;
 };
 
 // -----------------------------------------------------------------------
@@ -169,9 +191,18 @@ struct Entity
 };
 struct EntityHull
 {
-  int32_t root;
+  int32_t root;         // hull 1 clipnode root (pre-expanded, for movement)
+  int32_t root_h0 = -1; // hull 0 BSP node root (exact geometry, for hitscan); -1 = not set
   Vector3 *entity_pos;
   Vector3 spawn_origin;
+  // World-space AABB at spawn position (offset by movement_offset at trace time).
+  // has_bbox is false for hulls registered without a visible model.
+  Vector3 bbox_min = {0, 0, 0};
+  Vector3 bbox_max = {0, 0, 0};
+  bool has_bbox = false;
+  // Back-pointer to the GameObject3D that owns this hull (set at registration).
+  // Stored in TraceResult::hit_object when this hull is hit.
+  GameObject3D *owner = nullptr;
 };
 
 /*
@@ -1372,7 +1403,10 @@ struct BSP_Collider
 {
   std::vector<Plane> planes;
   std::vector<Clipnode> clipnodes;
-  int32_t root = 0;
+  int32_t root = 0;            // hull 1 root — used for player movement (pre-expanded box sweep)
+  int32_t root_h0_node = 0;    // hull 0 root — BSP node tree root for point traces / hitscan
+  std::vector<Node> h0_nodes;  // BSP node tree (hull 0, shared with renderer)
+  std::vector<Leaf> h0_leaves; // BSP leaves (hull 0) — leaf.type gives content codes
   std::vector<EntityHull> entity_hulls;
 
   /*
@@ -1381,13 +1415,23 @@ struct BSP_Collider
   */
   void Load(BSP_File &map)
   {
+    // Hull 1 (player-sized box sweep) — used by MoveAndSlide
     root = map.model(0).clipnode1_id;
+    // Hull 0 (point trace) — uses BSP node tree, not clipnodes
+    root_h0_node = map.model(0).bsp_node_id;
+
     int np = map.header.planes.size / sizeof(Plane);
     int nc = map.header.clipnodes.size / sizeof(Clipnode);
+    int nn = map.header.nodes.size / sizeof(Node);
+    int nl = map.header.leaves.size / sizeof(Leaf);
     for (int i = 0; i < np; i++)
       planes.push_back(map.plane(i));
     for (int i = 0; i < nc; i++)
       clipnodes.push_back(map._read<Clipnode>(map.header.clipnodes, i));
+    for (int i = 0; i < nn; i++)
+      h0_nodes.push_back(map.node(i));
+    for (int i = 0; i < nl; i++)
+      h0_leaves.push_back(map.leaf(i));
   };
 
   /*
@@ -1425,6 +1469,125 @@ struct BSP_Collider
     // return PointContents(ToQuake(raylib_pos)) == -2;
     auto tr = TraceBSP(raylib_pos, raylib_pos);
     return tr.started_solid || tr.all_solid;
+  };
+
+  /*
+  NodePointContents
+  Walk the BSP NODE tree from 'node' to find the content type at point p (Quake space).
+  Equivalent to Quake's SV_HullPointContents but for hull-0 BSP nodes.
+  */
+  int NodePointContents(int node, Vector3 p) const
+  {
+    while (node >= 0)
+    {
+      if (node >= (int)h0_nodes.size())
+        return -1; // treat as empty
+      const Node &nd = h0_nodes[node];
+      const Plane &pl = planes[nd.plane_id];
+      float d = Vector3DotProduct(pl.normal, p) - pl.dist;
+      node = (d >= 0) ? nd.front : nd.back;
+    }
+    // node is now a leaf (negative value): ~node = leaf index
+    int leaf_idx = ~node;
+    if (leaf_idx < 0 || leaf_idx >= (int)h0_leaves.size())
+      return -1; // treat as empty
+    return h0_leaves[leaf_idx].type;
+  }
+
+  /*
+  RecursiveNodeCheck
+  Faithful port of Quake's SV_RecursiveHullCheck for hull 0 (BSP node tree).
+
+  Key differences from the old dual-epsilon version:
+  - Single midpoint (frac / mid) — Quake convention.  The far-side recursion
+    starts from the same mid as the near-side endpoint, avoiding the degenerate
+    "frac2 clamps to 1" case for near-tangent rays through stair geometry.
+  - NodePointContents pre-check before far recursion, matching Quake's
+    SV_HullPointContents shortcut that detects immediate-solid far sides.
+  */
+  bool RecursiveNodeCheck(int node, float p1f, float p2f, Vector3 p1, Vector3 p2, TraceResult &tr)
+  {
+    // ── Leaf ──────────────────────────────────────────────────────────────────
+    if (node < 0)
+    {
+      int leaf_idx = ~node; // BSP node child encoding: negative = ~leaf_index
+      int32_t contents = -1;
+      if (leaf_idx >= 0 && leaf_idx < (int)h0_leaves.size())
+        contents = h0_leaves[leaf_idx].type;
+
+      if (contents == -2) // CONTENTS_SOLID
+      {
+        if (p1f == 0.0f)
+          tr.started_solid = true;
+        return false;
+      }
+      tr.all_solid = false; // reached non-solid → not entirely solid
+      return true;
+    }
+
+    if (node >= (int)h0_nodes.size())
+      return true; // safety: treat out-of-range as empty
+
+    // ── Node ──────────────────────────────────────────────────────────────────
+    const Node &nd = h0_nodes[node];
+    const Plane &pl = planes[nd.plane_id];
+
+    float t1 = Vector3DotProduct(pl.normal, p1) - pl.dist;
+    float t2 = Vector3DotProduct(pl.normal, p2) - pl.dist;
+
+    // Both endpoints on the same side — recurse into that child only.
+    if (t1 >= 0 && t2 >= 0)
+      return RecursiveNodeCheck(nd.front, p1f, p2f, p1, p2, tr);
+    if (t1 < 0 && t2 < 0)
+      return RecursiveNodeCheck(nd.back, p1f, p2f, p1, p2, tr);
+
+    // ── Crossing ──────────────────────────────────────────────────────────────
+    static constexpr float DIST_EPSILON = 0.03125f; // 1/32 QU — matches Quake
+
+    int side = (t1 < 0) ? 1 : 0;
+    int near_child = side ? nd.back : nd.front;
+    int far_child = side ? nd.front : nd.back;
+
+    // Single midpoint pushed toward the near side (Quake convention).
+    // Using two separate epsilon points (frac / frac2) causes frac2 to clamp
+    // to 1.0 for near-tangent rays, making the far recursion start at the
+    // endpoint and skip the crossing zone — producing false solid hits near
+    // stair and doorway geometry.
+    float frac = (t1 < 0)
+                     ? std::clamp((t1 + DIST_EPSILON) / (t1 - t2), 0.0f, 1.0f)
+                     : std::clamp((t1 - DIST_EPSILON) / (t1 - t2), 0.0f, 1.0f);
+
+    float midf = p1f + (p2f - p1f) * frac;
+    Vector3 mid = Vector3Lerp(p1, p2, frac);
+
+    // Near side first.
+    if (!RecursiveNodeCheck(near_child, p1f, midf, p1, mid, tr))
+      return false;
+
+    // Pre-check: is the far side solid at the midpoint?
+    // Matches Quake's SV_HullPointContents check — avoids unnecessary
+    // recursion and handles degenerate near-plane cases correctly.
+    if (NodePointContents(far_child, mid) == -2) // CONTENTS_SOLID
+    {
+      // Impact at the splitting plane.
+      if (!tr.started_solid)
+      {
+        tr.fraction = midf;
+        Vector3 qnorm = (side == 0) ? pl.normal : Vector3Negate(pl.normal);
+        tr.normal = Vector3Normalize({qnorm.y, qnorm.z, qnorm.x});
+      }
+      return false;
+    }
+
+    // Far side is not immediately solid — recurse into it and propagate the
+    // result verbatim. The inner recursion is responsible for setting
+    // tr.fraction / tr.normal at the actual deeper impact; overwriting them
+    // here would pull the reported hit back to THIS node's splitting plane,
+    // producing snags on every BSP division crossed before the real surface
+    // (lips, stair edges, brush seams along grazing rays). Matches Quake's
+    // SV_RecursiveHullCheck: fraction is only assigned when the immediate
+    // far-side point is solid (the NodePointContents branch above).
+    return RecursiveNodeCheck(far_child, midf, p2f, mid, p2, tr);
   };
 
   /*
@@ -1497,9 +1660,10 @@ struct BSP_Collider
   };
 
   /*
-  TraceBox
-  traces the BSP player hull from 'from' to 'to' (raylib space).
-  the clipnodes are pre-expanded for the player size, so this is a proper swept-box test.
+  TraceBSP
+  Hull 1 (player-box pre-expanded clipnodes) world trace — used for movement.
+  Consistent with TraceEntityHulls which also uses hull 1, so player height is
+  stable whether standing on world geometry or a brush entity.
   */
   inline TraceResult TraceBSP(Vector3 from_rl, Vector3 to_rl)
   {
@@ -1509,8 +1673,127 @@ struct BSP_Collider
 
     if (tr.started_solid && tr.fraction == 1.0f)
       tr.all_solid = true;
+    if (tr.fraction < 1.0f || tr.started_solid)
+      tr.hit_type = TraceResult::HitType::World;
     return tr;
   };
+
+  /*
+  TraceBSP_H0
+  Hull 0 (BSP node tree, no pre-expansion) world trace — used for hitscan only.
+  Traces through actual geometry so walls don't appear closer than they are,
+  allowing gameobject AABB hits to win when the object is in front of a wall.
+  */
+  inline TraceResult TraceBSP_H0(Vector3 from_rl, Vector3 to_rl)
+  {
+    TraceResult tr = {};
+    tr.fraction = 1.0f;
+    RecursiveNodeCheck(root_h0_node, 0.0f, 1.0f, ToQuake(from_rl), ToQuake(to_rl), tr);
+
+    if (tr.started_solid && tr.fraction == 1.0f)
+      tr.all_solid = true;
+    if (tr.fraction < 1.0f || tr.started_solid)
+      tr.hit_type = TraceResult::HitType::World;
+    return tr;
+  };
+
+  /*
+  TraceEntityHullsH0
+  Like TraceEntityHulls but uses hull-0 BSP nodes (no pre-expansion) — for hitscan.
+  Hull 1 would place the wall surface closer than the object, causing the world hit
+  to win even when the ray visually passes through an entity.
+  */
+  TraceResult TraceEntityHullsH0(Vector3 from, Vector3 to)
+  {
+    TraceResult best;
+    best.fraction = 1.0f;
+
+    for (auto &hull : entity_hulls)
+    {
+      if (hull.entity_pos == nullptr)
+        continue;
+      if (hull.root_h0 < 0)
+        continue; // no hull-0 data (trigger / non-solid)
+      // Hitscan opt-out: func_illusionary, ghosted entities, etc.
+      if (hull.owner != nullptr && !GO_BlocksHitscan(hull.owner))
+        continue;
+
+      Vector3 movement_offset = Vector3Subtract(*hull.entity_pos, hull.spawn_origin);
+      Vector3 local_from = Vector3Subtract(from, movement_offset);
+      Vector3 local_to = Vector3Subtract(to, movement_offset);
+
+      TraceResult tr = {};
+      tr.fraction = 1.0f;
+      RecursiveNodeCheck(hull.root_h0, 0.0f, 1.0f, ToQuake(local_from), ToQuake(local_to), tr);
+
+      bool is_better = tr.fraction < best.fraction ||
+                       (tr.started_solid && !best.started_solid);
+      if (is_better)
+      {
+        best = tr;
+        if (best.started_solid)
+          best.fraction = 0.0f;
+        best.hit_type = TraceResult::HitType::BrushEntity;
+        best.hit_object = hull.owner;
+      }
+    }
+    return best;
+  };
+
+  // -----------------------------------------------------------------------
+  // Broadphase helpers
+  // -----------------------------------------------------------------------
+
+  // Slab ray–AABB test over the segment [from, to] (parametric t in [0,1]).
+  // Returns true if the segment hits the box.
+  // tmin_out: entry fraction (0..1), hit_normal_out: surface normal at entry.
+  static bool RayAABB(Vector3 from, Vector3 to,
+                      Vector3 bmin, Vector3 bmax,
+                      float &tmin_out, Vector3 &hit_normal_out)
+  {
+    float tmin = 0.0f, tmax = 1.0f;
+    float dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
+    float dirs[3] = {dx, dy, dz};
+    float orgs[3] = {from.x, from.y, from.z};
+    float lo[3] = {bmin.x, bmin.y, bmin.z};
+    float hi[3] = {bmax.x, bmax.y, bmax.z};
+
+    int hit_axis = -1;
+    bool hit_lo = false;
+
+    for (int i = 0; i < 3; i++)
+    {
+      if (fabsf(dirs[i]) < 1e-6f)
+      {
+        if (orgs[i] < lo[i] || orgs[i] > hi[i])
+          return false;
+        continue;
+      }
+      float t1 = (lo[i] - orgs[i]) / dirs[i];
+      float t2 = (hi[i] - orgs[i]) / dirs[i];
+      bool lo_side = (t1 < t2);
+      if (!lo_side)
+        std::swap(t1, t2);
+      if (t1 > tmin)
+      {
+        tmin = t1;
+        hit_axis = i;
+        hit_lo = lo_side;
+      }
+      tmax = std::min(tmax, t2);
+      if (tmin > tmax)
+        return false;
+    }
+
+    tmin_out = tmin;
+    hit_normal_out = {0, 0, 0};
+    if (hit_axis >= 0)
+    {
+      float *n = (float *)&hit_normal_out;
+      n[hit_axis] = hit_lo ? -1.0f : 1.0f;
+    }
+    return true;
+  }
 
   // -----------------------------------------------------------------------
   // Entity Hull Collisions
@@ -1522,8 +1805,10 @@ struct BSP_Collider
 
   /*
   TraceEntityHulls
-  Runs RecursiveHullCheck against every registered entity hull and returns
-  the earliest hit, combining with the world-geometry trace in TraceCombined.
+  Runs RecursiveHullCheck against each registered entity hull and returns
+  the earliest hit. No AABB broadphase — RecursiveHullCheck handles the
+  coordinate-space math correctly (Quake space, movement-offset adjusted)
+  and is the authoritative test for brush entity collision.
   */
   TraceResult TraceEntityHulls(Vector3 from, Vector3 to)
   {
@@ -1536,20 +1821,131 @@ struct BSP_Collider
         continue;
 
       Vector3 movement_offset = Vector3Subtract(*hull.entity_pos, hull.spawn_origin);
-
       Vector3 local_from = Vector3Subtract(from, movement_offset);
       Vector3 local_to = Vector3Subtract(to, movement_offset);
 
-      Vector3 qfrom = ToQuake(local_from);
-      Vector3 qto = ToQuake(local_to);
-
       TraceResult tr = {};
       tr.fraction = 1.0f;
+      RecursiveHullCheck(hull.root, 0.0f, 1.0f, ToQuake(local_from), ToQuake(local_to), tr);
 
-      RecursiveHullCheck(hull.root, 0.0f, 1.0f, qfrom, qto, tr);
+      // started_solid means the eye is inside this hull — treat as an immediate hit
+      // (fraction 0), taking priority over any world geometry behind it.
+      bool is_better = tr.fraction < best.fraction ||
+                       (tr.started_solid && !best.started_solid);
 
-      if (tr.fraction < best.fraction)
+      if (is_better)
+      {
         best = tr;
+        if (best.started_solid)
+          best.fraction = 0.0f; // normalise so callers can compare fractions
+        best.hit_type = TraceResult::HitType::BrushEntity;
+        best.hit_object = hull.owner;
+      }
+    }
+    return best;
+  };
+
+  // (TraceEntityHullsH0 / TraceCombinedH0 removed — hull 0 for vertical traces
+  //  conflicted with hull 1 horizontal movement, causing player to land inside solid.
+  //  Step-up now uses TraceBSP only; everything else uses TraceCombined (hull 1).)
+
+  /*
+  TraceObjects
+  AABB trace against a caller-supplied vector of GameObjects.
+  BSP has no knowledge of the global gameobjects list — the caller passes it in.
+  'exclude' skips one specific object (e.g. the shooter / mover itself).
+  */
+  template <typename T>
+  TraceResult TraceObjects(Vector3 from, Vector3 to,
+                           const std::vector<std::unique_ptr<T>> &objects,
+                           const T *exclude = nullptr)
+  {
+    TraceResult best;
+    best.fraction = 1.0f;
+
+    // Use segment-parameterised slab test: dirs[] is the full from→to vector (NOT normalised).
+    // t values are in [0,1] where 1 = endpoint.  This avoids the INF/NaN that
+    // GetRayCollisionBox produces when a direction component is 0 (horizontal rays, etc.).
+    float dirs[3] = {to.x - from.x, to.y - from.y, to.z - from.z};
+    float orgs[3] = {from.x, from.y, from.z};
+
+    for (auto &obj_ptr : objects)
+    {
+      const T *obj = obj_ptr.get();
+      if (!obj || obj->destroy_me)
+        continue;
+      if (obj == exclude)
+        continue;
+      if (Vector3Length(obj->collision_box) < 0.01f)
+        continue;
+      // Per-object hitscan opt-out (func_illusionary, ghost mode, etc.).
+      if (!obj->blocks_hitscan)
+        continue;
+      // Skip non-solid entities — Quake SOLID_NOT / SOLID_TRIGGER equivalents.
+      // path_*, info_*, trigger_* are marker/waypoint entities that should never
+      // block hitscan. Only monsters, players, items, weapons, etc. are hit.
+      const std::string &cn = obj->classname;
+      if (cn.starts_with("path") ||
+          cn.starts_with("info") ||
+          cn.starts_with("trigger"))
+        continue;
+
+      Vector3 half = {obj->collision_box.x * 0.5f,
+                      obj->collision_box.y * 0.5f,
+                      obj->collision_box.z * 0.5f};
+      Vector3 center = Vector3Add(obj->position, obj->collision_offset);
+      float lo[3] = {center.x - half.x, center.y - half.y, center.z - half.z};
+      float hi[3] = {center.x + half.x, center.y + half.y, center.z + half.z};
+
+      float tmin = 0.0f, tmax = 1.0f;
+      int hit_axis = -1;
+      bool hit_lo = false;
+      bool miss = false;
+
+      for (int i = 0; i < 3; i++)
+      {
+        if (fabsf(dirs[i]) < 1e-6f)
+        {
+          // Ray is parallel to this slab — miss if origin is outside it.
+          if (orgs[i] < lo[i] || orgs[i] > hi[i])
+          {
+            miss = true;
+            break;
+          }
+          continue;
+        }
+        float t1 = (lo[i] - orgs[i]) / dirs[i];
+        float t2 = (hi[i] - orgs[i]) / dirs[i];
+        bool ls = (t1 < t2);
+        if (!ls)
+          std::swap(t1, t2);
+        if (t1 > tmin)
+        {
+          tmin = t1;
+          hit_axis = i;
+          hit_lo = ls;
+        }
+        tmax = std::min(tmax, t2);
+        if (tmin > tmax)
+        {
+          miss = true;
+          break;
+        }
+      }
+      if (miss || tmin >= best.fraction)
+        continue;
+
+      Vector3 n = {0, 0, 0};
+      if (hit_axis >= 0)
+      {
+        ((float *)&n)[hit_axis] = hit_lo ? -1.0f : 1.0f;
+      }
+
+      best.fraction = tmin;
+      best.normal = n;
+      best.started_solid = (tmin == 0.0f);
+      best.hit_type = TraceResult::HitType::Object;
+      best.hit_object = const_cast<T *>(obj);
     }
     return best;
   };
@@ -1564,6 +1960,131 @@ struct BSP_Collider
     TraceResult bsp = TraceBSP(from, to);
     TraceResult ent = TraceEntityHulls(from, to);
     return (ent.fraction < bsp.fraction) ? ent : bsp;
+  };
+
+  /*
+  TraceAll — faithful Quake-style hitscan trace.
+
+  Three sources are tested and the closest hit (smallest fraction) wins:
+    1. Hull-0 worldspawn BSP point trace   — static world geometry.
+    2. Hull-0 brush entity submodel traces — doors, plats, breakables, func_*.
+    3. Gameobject AABB sweep               — monster / player / pickup hitboxes.
+
+  Brush entities MUST be included here. Their submodels are NOT part of the
+  worldspawn BSP — each registered EntityHull stores its own root_h0
+  (BrushEntity sets it from data.bsp_node_root at spawn). Without this,
+  hitscan passes straight through doors, breakables, and func_walls.
+
+  Entities that opt out of hitscan (blocks_hitscan == false) are filtered
+  inside TraceEntityHullsH0 / TraceObjects — see those functions. That's the
+  hook used by func_illusionary, wallbang cardboard, and player ghost mode.
+  */
+  template <typename T>
+  TraceResult TraceAll(Vector3 from, Vector3 to,
+                       const std::vector<std::unique_ptr<T>> &objects,
+                       const T *exclude = nullptr)
+  {
+    TraceResult world   = TraceBSP_H0(from, to);
+    TraceResult brushes = TraceEntityHullsH0(from, to);
+    TraceResult objs    = TraceObjects(from, to, objects, exclude);
+
+    // Pick the nearest world-ish hit (worldspawn or brush entity submodel).
+    TraceResult world_or_brush = (brushes.fraction < world.fraction) ? brushes : world;
+
+    // Give entity AABB a small world-space priority margin (0.1 rl ≈ 2 QU).
+    // This prevents the floor/ceiling BSP from blocking hits on the near edge
+    // of an entity bounding box that grazes solid geometry — a common case
+    // when the entity origin is placed at Quake floor level and the lower AABB
+    // barely clips underground.  0.1 rl is well below any real wall thickness.
+    float trace_len = Vector3Distance(from, to);
+    float margin = (trace_len > 1e-6f) ? (0.1f / trace_len) : 0.0f;
+    return (objs.fraction <= world_or_brush.fraction + margin) ? objs : world_or_brush;
+  };
+
+  /*
+  TraceWallbang — penetration trace.
+
+  Runs TraceAll repeatedly, tunnelling through any BrushEntity / Object hit
+  whose owner has wallbang_strength > 0 and <= the remaining budget. Each
+  penetrated wall reduces the budget by its wallbang_strength.
+
+  Returns the LAST hit (the one that actually stopped the bullet) and fills
+  `out_path` with every penetrated entity along the way, in order, so the
+  caller can apply damage/sparks at each.
+
+  Notes:
+   - Worldspawn (HitType::World) is always opaque — there's no per-face
+     metadata on it. To make a worldspawn wall penetrable, convert it to a
+     brush entity (e.g. classname "func_wallbang") in the map editor and
+     set wallbang_strength on that entity at spawn time.
+   - We re-emit the trace from `hit_pos + dir * EPSILON` so it doesn't
+     immediately re-hit the same surface. Using a tiny world-space epsilon
+     keeps us well clear of the just-pierced face but doesn't skip over a
+     stacked second wall behind it.
+  */
+  template <typename T>
+  TraceResult TraceWallbang(Vector3 from, Vector3 to,
+                            const std::vector<std::unique_ptr<T>> &objects,
+                            const T *exclude,
+                            int budget,
+                            std::vector<GameObject3D *> *out_path = nullptr,
+                            int max_walls = 8)
+  {
+    constexpr float EPS = 0.01f;       // raylib units past the hit
+
+    // RAII guard: any entity we penetrate gets its blocks_hitscan flipped
+    // off so the next iteration's TraceAll skips it (otherwise we'd re-hit
+    // the same near-face on the very next trace, since EPS is smaller than
+    // the wall thickness for anything non-paper-thin). Restored on exit.
+    std::vector<GameObject3D *> penetrated;
+    struct Restorer {
+      std::vector<GameObject3D *> &list;
+      ~Restorer() { for (auto *o : list) GO_SetBlocksHitscan(o, true); }
+    } restorer{penetrated};
+
+    TraceResult last = {};
+    last.fraction = 1.0f;
+    Vector3 cur_from = from;
+
+    for (int i = 0; i < max_walls; ++i)
+    {
+      TraceResult tr = TraceAll(cur_from, to, objects, exclude);
+      last = tr;
+
+      // Nothing hit — bullet flies free to `to`.
+      if (tr.fraction >= 1.0f || tr.hit_type == TraceResult::HitType::None)
+        return last;
+
+      // Worldspawn is always opaque (no per-face metadata yet — see notes).
+      if (tr.hit_type == TraceResult::HitType::World)
+        return last;
+
+      GameObject3D *hit = tr.hit_object;
+      int strength = GO_WallbangStrength(hit);
+
+      // Impenetrable hit (no wallbang strength, or budget exhausted) — stop.
+      if (strength <= 0 || strength > budget)
+        return last;
+
+      // Penetrate: spend budget, record path, suppress this entity for the
+      // remainder of the call.
+      budget -= strength;
+      if (out_path)
+        out_path->push_back(hit);
+      GO_SetBlocksHitscan(hit, false);
+      penetrated.push_back(hit);
+
+      // Advance past the impact point by a tiny epsilon along the trace dir.
+      Vector3 dir = Vector3Subtract(to, cur_from);
+      float   len = Vector3Length(dir);
+      if (len < 1e-6f)
+        return last;
+      float advance = tr.fraction * len + EPS;
+      if (advance >= len)
+        return last; // would overshoot the original endpoint
+      cur_from = Vector3Add(cur_from, Vector3Scale(dir, advance / len));
+    }
+    return last;
   };
 
   /*
@@ -1909,7 +2430,7 @@ struct BSP_Collider
       return;
     }
 
-    // hit wall , try step up
+    // hit wall, try step up
     // first get slide result
     int slide_blocked = FlyMove(pos, vel);
     Vector3 slide_pos = pos;
@@ -1923,18 +2444,25 @@ struct BSP_Collider
     vel = original_vel;
     vel.y = 0;
 
-    // step up
-    Vector3 dest_up = {pos.x, pos.y + step_height, pos.z};
-    TraceResult tr_up = TraceCombined(pos, dest_up);
-    if (!tr_up.started_solid)
+    // step up — use TraceBSP (world hull 1 only, no entity hulls).
+    // When adjacent to a solid entity, that entity's hull-1 pre-expansion bleeds
+    // outward by 16 QU in X/Z and can make the upward trace return started_solid even
+    // though the entity is beside us, not above us. The world BSP never has that problem
+    // for a vertical trace, and ceilings (world) are what we actually need to check here.
     {
-      pos.y += step_height * tr_up.fraction;
+      Vector3 dest_up = {pos.x, pos.y + step_height, pos.z};
+      TraceResult tr_up = TraceBSP(pos, dest_up);
+      // Allow step-up even when started_solid (player is touching hull-1 boundary).
+      // In that case use the full step height; the forward FlyMove will correct if needed.
+      float up_frac = tr_up.started_solid ? 1.0f : tr_up.fraction;
+      pos.y += step_height * up_frac;
     }
 
-    // step forward (slide in air)
+    // step forward (slide in air) using full hull-1 so walls are properly blocked
     FlyMove(pos, vel);
 
-    // step down (to floor)
+    // step down to floor/entity — hull-1 so landing position is consistent with
+    // horizontal movement (player stays at hull-1 surface, not hull-0 raw geometry).
     Vector3 step_pos = {};
     Vector3 air_finish_pos = pos;
     Vector3 dest_down = {air_finish_pos.x, air_finish_pos.y - step_height, air_finish_pos.z};
@@ -1942,15 +2470,13 @@ struct BSP_Collider
     float slide_dist_sq, step_dist_sq;
     bool stepped_up;
 
-    // if we land on wall/steep slop ignore this
-    if (tr_down.normal.y < SLOPE_MAX)
+    // If the step-down finds no floor, is inside solid, or hits a steep surface,
+    // the step move failed — fall back to the slide result.
+    if (tr_down.started_solid || tr_down.fraction == 1.0f || tr_down.normal.y < SLOPE_MAX)
       goto usedown;
 
-    if (!tr_down.started_solid)
-    {
-      pos.y = air_finish_pos.y - step_height * tr_down.fraction;
-      pos.y += UNCLIP_DIST * bsp_raylib_scale;
-    }
+    pos.y = air_finish_pos.y - step_height * tr_down.fraction;
+    pos.y += UNCLIP_DIST * bsp_raylib_scale;
 
     step_pos = pos;
     // which went further?
@@ -2107,7 +2633,8 @@ struct BSP_BrushEntityData
   bool has_model = false;
   Vector3 collision_box = {0, 0, 0};
   Vector3 collision_offset = {0, 0, 0};
-  int clipnode_root = -1;
+  int clipnode_root = -1; // hull 1 (pre-expanded), for horizontal wall collision
+  int bsp_node_root = 0;  // hull 0 BSP node, for step-up/step-down vertical traces
   std::string target_name = "";
   std::string target = "";
   int spawn_flags = 0;
@@ -2247,7 +2774,10 @@ inline std::vector<BSP_BrushEntityData> BSP_SpawnBrushEntities()
 
       // Solid logic
       if (!data.classname.starts_with("trigger"))
-        data.clipnode_root = submodel.clipnode1_id;
+      {
+        data.clipnode_root = submodel.clipnode1_id; // hull 1 (horizontal wall sweeps)
+        data.bsp_node_root = submodel.bsp_node_id;  // hull 0 (step-up/step-down)
+      }
     }
     else
     {

@@ -54,6 +54,26 @@ obj:set_model(model_path)           -- load model by filepath
 obj:set_model_scale(w, h, l)       -- default 1,1,1
 obj:set_angle(angle)               -- set Y rotation angle
 
+obj:traceline(distance) -- shoots a serverside only traceline ray
+
+--Traceline Example:
+local tr = self.traceline(512)
+if not tr then return end  -- no local player
+
+if tr.hit_type == "world" then
+  -- hit a solid BSP wall, tr.normal tells you the face
+
+elseif tr.hit_type == "brush_entity" then
+  -- hit a door/button/mover, tr.hit_object is the GameObject3D
+  tr.hit_object:on_trigger()   -- fire it, for example
+
+elseif tr.hit_type == "object" then
+  -- hit another gameobject (player, enemy, prop)
+  local hp = tr.hit_object:get("health")
+  tr.hit_object:set("health", hp - 10)
+end
+
+
 find_closest_object(max_dist)      -- returns nearest object within range
 find_all_objects_in_range(max_dist) -- returns table of all objects in range
 get_aabb()                         -- returns BoundingBox {min={xyz}, max={xyz}}
@@ -172,6 +192,8 @@ function set_window_mode(mode)        -- 0=windowed, 1=fullscreen, 2=borderless 
 function set_window_title(title)
 function set_window_position(x, y)
 function set_window_icon(path)
+
+function traceline(distance) -- shoots a (clientside only) traceline into the world
 
 function toggle_fullscreen()
 function toggle_borderless_windowed()

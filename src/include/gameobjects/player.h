@@ -64,24 +64,28 @@ handles mouse yaw and pitch
       }
     };
 
-    int key_fwd       = EngineInputCode("up",    KEY_W);
-    int key_back      = EngineInputCode("down",  KEY_S);
-    int key_right     = EngineInputCode("right", KEY_D);
-    int key_left      = EngineInputCode("left",  KEY_A);
-    int key_fwd_alt   = EngineInputCodeAlt("up");
-    int key_back_alt  = EngineInputCodeAlt("down");
+    int key_fwd = EngineInputCode("up", KEY_W);
+    int key_back = EngineInputCode("down", KEY_S);
+    int key_right = EngineInputCode("right", KEY_D);
+    int key_left = EngineInputCode("left", KEY_A);
+    int key_fwd_alt = EngineInputCodeAlt("up");
+    int key_back_alt = EngineInputCodeAlt("down");
     int key_right_alt = EngineInputCodeAlt("right");
-    int key_left_alt  = EngineInputCodeAlt("left");
+    int key_left_alt = EngineInputCodeAlt("left");
 
-    UpdateStack(key_fwd,   vertical_stack);
-    UpdateStack(key_back,  vertical_stack);
-    if (key_fwd_alt  > 0) UpdateStack(key_fwd_alt,  vertical_stack);
-    if (key_back_alt > 0) UpdateStack(key_back_alt, vertical_stack);
+    UpdateStack(key_fwd, vertical_stack);
+    UpdateStack(key_back, vertical_stack);
+    if (key_fwd_alt > 0)
+      UpdateStack(key_fwd_alt, vertical_stack);
+    if (key_back_alt > 0)
+      UpdateStack(key_back_alt, vertical_stack);
 
     UpdateStack(key_right, horizontal_stack);
-    UpdateStack(key_left,  horizontal_stack);
-    if (key_right_alt > 0) UpdateStack(key_right_alt, horizontal_stack);
-    if (key_left_alt  > 0) UpdateStack(key_left_alt,  horizontal_stack);
+    UpdateStack(key_left, horizontal_stack);
+    if (key_right_alt > 0)
+      UpdateStack(key_right_alt, horizontal_stack);
+    if (key_left_alt > 0)
+      UpdateStack(key_left_alt, horizontal_stack);
 
     if (!horizontal_stack.empty())
     {
@@ -123,11 +127,15 @@ updates camera position, yaw, and pitch
     if (!camera)
       return;
 
+    // Use the exact same direction as GetViewForward() so the camera's
+    // visual aim and the traceline ray are always in perfect agreement.
+    // tanf(pitch) was previously used here but diverges from sinf(pitch) at
+    // any notable look-up/down angle, causing tracelines to miss aimed targets.
     Vector3 viewdir = {
-        sinf(global_cam_yaw),
-        tanf(global_cam_pitch),
-        -cosf(global_cam_yaw)};
-    camera->position = (Vector3){position.x, position.y + 0.5f, position.z};
+        cosf(global_cam_pitch) * sinf(global_cam_yaw),
+        sinf(global_cam_pitch),
+        -cosf(global_cam_pitch) * cosf(global_cam_yaw)};
+    camera->position = (Vector3){position.x, position.y + 1.0f, position.z};
     camera->target = Vector3Add(camera->position, viewdir);
   };
 
@@ -250,7 +258,54 @@ updates camera position, yaw, and pitch
   void Draw() override
   {
     if (client_id == my_local_player_id)
+    {
+      // Draw laser sight for local player only (no body drawn in first person)
+      if (global_show_collisions)
+      {
+        const float range = 2048.0f;
+        Vector3 eye = GetEyePos();
+        Vector3 fwd = GetViewForward();
+        TraceResult tr = TraceViewLine(range);
+        Vector3 hit_pos = Vector3Add(eye, Vector3Scale(fwd, tr.fraction * range));
+
+        Color beam_color = GREEN;
+        Color dot_color = GREEN;
+        if (tr.hit_type == TraceResult::HitType::World)
+        {
+          beam_color = RED;
+          dot_color = RED;
+        }
+        else if (tr.hit_type == TraceResult::HitType::BrushEntity)
+        {
+          beam_color = ORANGE;
+          dot_color = ORANGE;
+        }
+        else if (tr.hit_type == TraceResult::HitType::Object)
+        {
+          beam_color = YELLOW;
+          dot_color = YELLOW;
+        }
+
+        // Offset the line start slightly forward + to the right so it's
+        // visible in first person (a line going straight away from the camera
+        // is invisible — you're looking along it).
+        Vector3 right = {cosf(global_cam_yaw), 0.0f, sinf(global_cam_yaw)};
+        Vector3 draw_start = Vector3Add(
+            Vector3Add(eye, Vector3Scale(fwd, 0.3f)),
+            Vector3Scale(right, 0.12f));
+        DrawLine3D(draw_start, hit_pos, beam_color);
+
+        // Small cross at the hit point (no sphere)
+        if (tr.fraction < 1.0f)
+        {
+          float cs = 0.06f;
+          DrawLine3D({hit_pos.x - cs, hit_pos.y, hit_pos.z}, {hit_pos.x + cs, hit_pos.y, hit_pos.z}, beam_color);
+          DrawLine3D({hit_pos.x, hit_pos.y - cs, hit_pos.z}, {hit_pos.x, hit_pos.y + cs, hit_pos.z}, beam_color);
+          DrawLine3D({hit_pos.x, hit_pos.y, hit_pos.z - cs}, {hit_pos.x, hit_pos.y, hit_pos.z + cs}, beam_color);
+        }
+      }
       return;
+    }
     GameObject3D::Draw();
   };
 

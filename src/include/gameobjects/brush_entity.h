@@ -25,9 +25,25 @@ public:
     position = data.origin;
     spawn_origin = data.origin;
 
-    bsp_collider.entity_hulls.push_back({clipnode_root,
-                                         &position,
-                                         data.origin});
+    collision_box    = {0, 0, 0};
+    collision_offset = {0, 0, 0};
+
+    {
+      EntityHull h;
+      h.root         = clipnode_root;       // hull 1: pre-expanded, horizontal walls
+      h.root_h0      = data.bsp_node_root;  // hull 0: exact geometry, step up/down
+      h.entity_pos   = &position;
+      h.spawn_origin = data.origin;
+      h.owner        = this;
+      if (has_model)
+      {
+        BoundingBox bb = GetModelBoundingBox(brush_model);
+        h.bbox_min  = bb.min;
+        h.bbox_max  = bb.max;
+        h.has_bbox  = true;
+      }
+      bsp_collider.entity_hulls.push_back(h);
+    }
 
     if (classname.starts_with("trigger"))
     {

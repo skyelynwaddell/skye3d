@@ -449,10 +449,36 @@ static void register_gameobject3d_usertype(sol::state &lua, bool is_server)
 
       // ----- classname -----
       "get_classname", [](GameObject3D &self)
-      { return self.classname; }, "set_classname", [](GameObject3D &self, const std::string &v)
+      { return self.classname; },
+      "set_classname", [](GameObject3D &self, const std::string &v)
       { 
         self.classname = v; 
         self.sync_flags |= SYNC_CLASSNAME; },
+
+      "traceline", [](sol::this_state ts, GameObject3D &self, double dist = 2048.0) -> sol::object
+      {
+        sol::state_view lua(ts);
+        TraceResult tr = self.TraceViewLine(static_cast<float>(dist));
+
+        sol::table t = lua.create_table();
+        t["fraction"]      = tr.fraction;
+        t["started_solid"] = tr.started_solid;
+        t["hit"]           = tr.fraction < 1.0f;
+        sol::table n = lua.create_table();
+        n["x"] = tr.normal.x; n["y"] = tr.normal.y; n["z"] = tr.normal.z;
+        t["normal"] = n;
+
+        using HT = TraceResult::HitType;
+        switch (tr.hit_type)
+        {
+          case HT::World:        t["hit_type"] = "world";        break;
+          case HT::BrushEntity:  t["hit_type"] = "brush_entity";
+                                 t["hit_object"] = tr.hit_object; break;
+          case HT::Object:       t["hit_type"] = "object";
+                                 t["hit_object"] = tr.hit_object; break;
+          default:               t["hit_type"] = "none";          break;
+        }
+        return t; },
 
       // ----- think function -----
       // Scripts call: obj:set_think(function(self, dt) ... end)
@@ -845,6 +871,58 @@ static void bind_globals(sol::state &lua, bool is_server)
                        DrawCube(Vector3{(float)x, (float)y, (float)z},
                                 (float)w, (float)h, (float)l,
                                 LuaGetColor(color));
+                     });
+
+    // --- client traceline ---
+    // Finds the local player (is_me == true) and fires TraceLine from them.
+    // Returns a table {fraction, normal={x,y,z}, started_solid, hit} or nil
+    // if no local player exists.
+    lua.set_function("traceline",
+                     [](sol::this_state ts, sol::optional<double> dist_opt) -> sol::object
+                     {
+                       sol::state_view lua(ts);
+                       float dist = dist_opt ? (float)*dist_opt : 2048.0f;
+
+                       for (auto &obj_ptr : gameobjects)
+                       {
+                         if (!obj_ptr || !obj_ptr->is_me)
+                           continue;
+
+                         TraceResult tr = obj_ptr->TraceViewLine(dist);
+
+                         sol::table t = lua.create_table();
+                         t["fraction"] = tr.fraction;
+                         t["started_solid"] = tr.started_solid;
+                         t["hit"] = tr.fraction < 1.0f;
+
+                         sol::table n = lua.create_table();
+                         n["x"] = tr.normal.x;
+                         n["y"] = tr.normal.y;
+                         n["z"] = tr.normal.z;
+                         t["normal"] = n;
+
+                         // What was hit
+                         using HT = TraceResult::HitType;
+                         switch (tr.hit_type)
+                         {
+                         case HT::World:
+                           t["hit_type"] = "world";
+                           break;
+                         case HT::BrushEntity:
+                           t["hit_type"] = "brush_entity";
+                           t["hit_object"] = tr.hit_object; // LuaMenuItem usertype already registered
+                           break;
+                         case HT::Object:
+                           t["hit_type"] = "object";
+                           t["hit_object"] = tr.hit_object;
+                           break;
+                         default:
+                           t["hit_type"] = "none";
+                           break;
+                         }
+                         return t;
+                       }
+                       return sol::nil; // no local player found
                      });
   }
 

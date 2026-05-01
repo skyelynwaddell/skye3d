@@ -44,6 +44,13 @@ public:
   bool is_me = false;
   bool destroy_me = false;
   bool visible = true;
+  // Hitscan opt-out. Defaults to true for everything — set false on entities
+  bool blocks_hitscan = true;
+  // 0 = impenetrable (default). >0 = how much "penetration budget" this
+  // surface costs to shoot through. Wallbang traces start with a budget
+  // (e.g. cardboard=1, drywall=2, brick=99) and tunnel through any entity
+  // whose strength is <= remaining budget.
+  int wallbang_strength = 0;
   std::string classname = "";
   std::string target_name = "";
   std::string target = "";
@@ -86,6 +93,39 @@ public:
   {
     return position;
   }
+
+  // Forward direction derived from angle (same convention as the player camera).
+  // angle is stored as -cam_yaw * RAD2DEG, so we reverse it back to get yaw.
+  Vector3 GetForward() const
+  {
+    float yaw = -angle * DEG2RAD;
+    return {sinf(yaw), 0.0f, -cosf(yaw)};
+  }
+
+  // Eye / muzzle position — must match the camera offset in Player::UpdateCamera.
+  inline static float eye_offset = 1.0f;
+  Vector3 GetEyePos() const
+  {
+    return {position.x,
+            position.y + eye_offset,
+            position.z};
+  }
+
+  // Full 3D view direction using global camera pitch+yaw.
+  // GetForward() is yaw-only (for NPCs/objects); this version is for the local player's aim.
+  Vector3 GetViewForward() const
+  {
+    float yaw = global_cam_yaw;
+    float pitch = global_cam_pitch;
+    return Vector3Normalize({cosf(pitch) * sinf(yaw),
+                             sinf(pitch),
+                             -cosf(pitch) * cosf(yaw)});
+  }
+
+  // Defined below, after gameobjects is declared.
+  TraceResult TraceLine(float range = 2048.0f);
+  TraceResult TraceLineObjects(float range = 2048.0f);
+  TraceResult TraceViewLine(float range = 2048.0f); // pitched, uses camera yaw+pitch
 
   std::vector<GameObject3D *> FindAllObjectsInRange(float max_dist);
   GameObject3D *FindClosestObject(float max_dist);
@@ -131,7 +171,7 @@ public:
           game_model.model,
           {
               position.x,
-              position.y - (collision_box.y / 2),
+              position.y + collision_offset.y - (collision_box.y / 2),
               position.z,
           },
           {0, 1, 0}, // rotate around Y
@@ -180,8 +220,39 @@ public:
   virtual void CleanUp() {};
 };
 
+// Definitions for the accessor shims forward-declared in bsp.h.
+// Kept here so bsp.h can use them in non-template code without needing
+// the full GameObject3D type at that point in the header chain.
+inline bool GO_BlocksHitscan(const GameObject3D *o)        { return o ? o->blocks_hitscan : true; }
+inline int  GO_WallbangStrength(const GameObject3D *o)     { return o ? o->wallbang_strength : 0; }
+inline void GO_SetBlocksHitscan(GameObject3D *o, bool v)   { if (o) o->blocks_hitscan = v; }
+
 // stores all gameobjects in game
 inline std::vector<std::unique_ptr<GameObject3D>> gameobjects;
+
+// TraceLine / TraceLineObjects / TraceViewLine — defined here so gameobjects is in scope.
+// Cast this to const GameObject3D* so the template always deduces T = GameObject3D,
+// matching the vector element type regardless of which subclass calls the method.
+inline TraceResult GameObject3D::TraceLine(float range)
+{
+  Vector3 from = GetEyePos();
+  Vector3 to = Vector3Add(from, Vector3Scale(GetForward(), range));
+  return bsp_collider.TraceAll(from, to, gameobjects, static_cast<const GameObject3D *>(this));
+}
+
+inline TraceResult GameObject3D::TraceLineObjects(float range)
+{
+  Vector3 from = GetEyePos();
+  Vector3 to = Vector3Add(from, Vector3Scale(GetForward(), range));
+  return bsp_collider.TraceObjects(from, to, gameobjects, static_cast<const GameObject3D *>(this));
+}
+
+inline TraceResult GameObject3D::TraceViewLine(float range)
+{
+  Vector3 from = GetEyePos();
+  Vector3 to = Vector3Add(from, Vector3Scale(GetViewForward(), range));
+  return bsp_collider.TraceAll(from, to, gameobjects, static_cast<const GameObject3D *>(this));
+}
 
 /*
 DestroyIfNeeded

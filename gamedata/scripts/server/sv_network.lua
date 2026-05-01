@@ -20,26 +20,48 @@ packet_funcs = {
     end
 
     sendflags_sync(cid, val)
+    local player = get_player_instance(cid)
+    if not player then
+      print("error: no player instance for cid " .. cid .. "\n")
+      return
+    end
+
+    -- Shoot
+    if (val & SENDFLAG_SHOOT) ~= 0 then
+      local tr = player:traceline(2048)
+      if tr then
+        if tr.hit_type == "world" then
+          -- hit solid
+          print("shot world\n")
+        elseif tr.hit_type == "brush_entity" then
+          -- hit brush ent
+          print("shot brush ent\n")
+        elseif tr.hit_type == "object" then
+          -- hit gameobject
+          print("shot gameobject\n")
+        end
+      end
+    end
 
     -- Interact
     if (val & SENDFLAG_INTERACT) ~= 0 then
-      local player = get_player_instance(cid)
-      if not player then
-        print("error: no player instance for cid " .. cid .. "\n")
-        return
-      end
+      local tr = player:traceline(3)
+      if tr then
+        if tr.hit_type == "world" then
+          -- hit solid
+          print("interacted w/ world\n")
+        elseif tr.hit_type == "brush_entity" then
+          -- hit brush ent
 
-      local interact_dist = 4
-      local objs = player:find_all_objects_in_range(interact_dist)
-
-      if objs and #objs > 0 then
-        for i, obj in ipairs(objs) do
-          local name = obj:get_classname()
-          if name == "func_door" then
-            obj:on_trigger()
+          if tr.hit_object:get_classname() == "func_door" then
+            tr.hit_object:on_trigger()
           end
+
+          print("interacted w/ brush ent\n")
+        elseif tr.hit_type == "object" then
+          -- hit gameobject
+          print("interacted w/ gameobject\n")
         end
-        --
       end
     end
   end,
@@ -63,24 +85,14 @@ packet_funcs = {
     print("total players: " .. total_players .. "\n")
     send_packet_number(packet.client_id, "cs_get_player_count", total_players)
   end,
-
 }
 
---[[
-poll_packets
-Polls packets from the client
-]]
 function poll_packets()
   local packet = get_packet()
-
   while packet ~= nil do
     if packet_funcs[packet.name] ~= nil then
-      -- run func inside of 'packet_funcs' table with same name as packet_name
       packet_funcs[packet.name](packet)
-    else
-      print("Warning: No handler for packet '" .. packet.name .. "'\n")
     end
-
     packet = get_packet()
   end
   return true
