@@ -225,15 +225,19 @@ struct BSP_Model
 };
 
 /*
-Edge
-Two indices pointing to the Vertex array. An edge is just a line between two points.
+Edge — disk format. Q1 uses uint16, BSP2 uses uint32. The in-memory Edge
+(defined after the packed block) uses uint32 so callers don't care which
+format the file came from.
 */
-struct Edge
+struct Edge_Disk_Q1
 {
-  uint16_t vs; // index of the start vertex
-               //  must be in [0,numvertices[
-  uint16_t ve; // index of the end vertex
-               //  must be in [0,numvertices[
+  uint16_t vs;
+  uint16_t ve;
+};
+struct Edge_Disk_BSP2
+{
+  uint32_t vs;
+  uint32_t ve;
 };
 
 /*
@@ -265,25 +269,32 @@ struct TexInfo
 };
 
 /*
-Face
-A single polygon.
-It links to a plane_id (direction), ledge_id (the edges forming the shape), and texinfo_id (the texture).
+Face — disk format. Q1 = 20 bytes (uint16 plane/side/ledge_num/texinfo),
+BSP2 = 28 bytes (int32 throughout). In-memory Face uses the wide types.
 */
-struct Face
+struct Face_Disk_Q1
 {
-  uint16_t plane_id;   // The plane in which the face lies
-                       //   must be in [0,numplanes[
-  uint16_t side;       // 0 if in front of the plane, 1 if behind the plane
-  int32_t ledge_id;    // first edge in the List of edges
-                       //   must be in [0,numledges[
-  uint16_t ledge_num;  // number of edges in the List of edges
-  uint16_t texinfo_id; // index of the Texture info the face is part of
-                       //   must be in [0,numtexinfos[
-  uint8_t typelight;   // type of lighting, for the face
-  uint8_t baselight;   // from 0xFF (dark) to 0 (bright)
-  uint8_t light[2];    // two additional light models
-  uint32_t lightmap;   // Pointer inside the general light map, or -1
-                       //   this defines the start of the face light map
+  uint16_t plane_id;
+  uint16_t side;
+  int32_t  ledge_id;
+  uint16_t ledge_num;
+  uint16_t texinfo_id;
+  uint8_t  typelight;
+  uint8_t  baselight;
+  uint8_t  light[2];
+  uint32_t lightmap;
+};
+struct Face_Disk_BSP2
+{
+  int32_t plane_id;
+  int32_t side;
+  int32_t ledge_id;
+  int32_t ledge_num;
+  int32_t texinfo_id;
+  uint8_t typelight;
+  uint8_t baselight;
+  uint8_t light[2];
+  uint32_t lightmap;
 };
 
 /*
@@ -306,66 +317,133 @@ struct Miptex
  */
 
 /*
-Node
-A "branch" in the tree.
-It splits a volume of space into front and back children using a Plane.
+Node — disk format. Q1 = 24 bytes (int16 children, int16 face refs, int16
+bbox); BSP2 = 44 bytes (int32 children, int32 face refs, float bbox).
+The in-memory Node (defined after the packed block) uses the wide types,
+so the rest of the engine doesn't need to know which format the file used.
 */
-struct Node
+struct Node_Disk_Q1
 {
-  uint32_t plane_id; // The plane that splits the node
-                     //   must be in [0,numplanes[
-  int16_t front;     // If > 0,  front = index of Front child node
-                     // else,   ~front = index of child leaf
-  int16_t back;      // If > 0,   back = index of Back child node
-                     // else,    ~back = index of child leaf
-  BoundingBoxS box;  // Bounding box of node and all children
-  uint16_t face_id;  // Index of first Polygons in the node
-  uint16_t face_num; // Number of faces in the node
+  uint32_t plane_id;
+  int16_t  front;
+  int16_t  back;
+  BoundingBoxS box;
+  uint16_t face_id;
+  uint16_t face_num;
+};
+struct Node_Disk_BSP2
+{
+  uint32_t    plane_id;
+  int32_t     front;
+  int32_t     back;
+  BoundingBox box; // 6 floats
+  uint32_t    face_id;
+  uint32_t    face_num;
 };
 
 /*
-Leaf
-This represents an empty volume of space where the player can be.
-It contains a list of Face indices that are visible from that spot.
+Leaf — disk format. Q1 = 28 bytes; BSP2 = 44 bytes (wider face refs and
+float bbox). In-memory Leaf is the BSP2 layout.
 */
-struct Leaf
+struct Leaf_Disk_Q1
 {
-  int32_t type;          // Special type of leaf
-  int32_t visibility_id; // Beginning of visibility lists
-                         //   must be -1 or in [0,numvislist[
-  BoundingBoxS bound;    // Bounding box of the leaf
-  uint16_t listface_id;  // First item of the list of faces
-                         //   must be in [0,numlfaces[
-  uint16_t listface_num; // Number of faces in the leaf
-  uint8_t sndwater;      // level of the four ambient sounds:
-  uint8_t sndsky;        //   0    is no sound
-  uint8_t sndslime;      //   0xFF is maximum volume
-  uint8_t sndlava;
+  int32_t  type;
+  int32_t  visibility_id;
+  BoundingBoxS bound;
+  uint16_t listface_id;
+  uint16_t listface_num;
+  uint8_t  sndwater;
+  uint8_t  sndsky;
+  uint8_t  sndslime;
+  uint8_t  sndlava;
+};
+struct Leaf_Disk_BSP2
+{
+  int32_t     type;
+  int32_t     visibility_id;
+  BoundingBox bound; // 6 floats
+  uint32_t    listface_id;
+  uint32_t    listface_num;
+  uint8_t     sndwater;
+  uint8_t     sndsky;
+  uint8_t     sndslime;
+  uint8_t     sndlava;
 };
 
-// uint16_t listface[numlface];   // each uint16_t is the index of a Face
-// int32_t listedge[numlstedge];
-// uint8_t vislist[numvislist];    // RLE encoded bit array
+// listface: Q1 stores uint16, BSP2 stores uint32. listedge is int32 in
+// both formats. vislist is a byte stream in both.
 
 /*
-Clipnode
-A simplified version of a Node used only for collision detection (physics), not rendering.
+Clipnode — disk format. Q1 = 8 bytes; BSP2 = 12 bytes (int32 children).
 */
-struct Clipnode
+struct Clipnode_Disk_Q1
 {
-  uint32_t planenum; // The plane which splits the node
-  int16_t front;     // If positive, id of Front child node
-                     // If -2, the Front part is inside the model
-                     // If -1, the Front part is outside the model
-  int16_t back;      // If positive, id of Back child node
-                     // If -2, the Back part is inside the model
-                     // If -1, the Back part is outside the model
+  uint32_t planenum;
+  int16_t  front;
+  int16_t  back;
 };
-
-// uint8_t lightmap[numlightmap]; // value 0:dark 255:bright
-// uint8_t light[width*height];
+struct Clipnode_Disk_BSP2
+{
+  uint32_t planenum;
+  int32_t  front;
+  int32_t  back;
+};
 
 #pragma pack(pop)
+
+// ---------------------------------------------------------------------------
+// In-memory structs — same names the rest of the engine has always used,
+// widened to BSP2-sized fields so we can losslessly hold either format.
+// Conversion from the appropriate disk struct happens in BSP_File accessors.
+// ---------------------------------------------------------------------------
+struct Edge
+{
+  uint32_t vs;
+  uint32_t ve;
+};
+
+struct Face
+{
+  uint32_t plane_id;
+  uint32_t side;
+  int32_t  ledge_id;
+  uint32_t ledge_num;
+  uint32_t texinfo_id;
+  uint8_t  typelight;
+  uint8_t  baselight;
+  uint8_t  light[2];
+  uint32_t lightmap;
+};
+
+struct Node
+{
+  uint32_t    plane_id;
+  int32_t     front;
+  int32_t     back;
+  BoundingBox box;
+  uint32_t    face_id;
+  uint32_t    face_num;
+};
+
+struct Leaf
+{
+  int32_t     type;
+  int32_t     visibility_id;
+  BoundingBox bound;
+  uint32_t    listface_id;
+  uint32_t    listface_num;
+  uint8_t     sndwater;
+  uint8_t     sndsky;
+  uint8_t     sndslime;
+  uint8_t     sndlava;
+};
+
+struct Clipnode
+{
+  uint32_t planenum;
+  int32_t  front;
+  int32_t  back;
+};
 
 // -----------------------------------------------------------------------
 // BSP File Parsing
@@ -430,13 +508,44 @@ struct BSP_File
   std::istream &bsp_file;
   Header header;
 
+  // True if this file is in BSP2 format ('BSP2' magic, 0x32505342). False
+  // means classic Quake 1 v29. Set in the constructor; every accessor that
+  // varies between formats branches on this flag and reads the appropriate
+  // *_Disk_Q1 / *_Disk_BSP2 struct, then converts to the wide in-memory
+  // struct.
+  bool is_bsp2 = false;
+
+  // Magic bytes "BSP2" stored little-endian as a uint32_t. Equal to
+  // ('B'|'S'<<8|'P'<<16|'2'<<24) = 0x32505342 = 844124994 decimal — which
+  // is what the version field reads as when the loader sees BSP2.
+  static constexpr int32_t BSP2_MAGIC = 0x32505342;
+
   BSP_File(std::ifstream &_file) : bsp_file(_file)
   {
     if (bsp_file.good() == false)
       throw std::runtime_error("Failed to open file");
 
     header = ReadT<Header>(bsp_file);
-    printf("BSP Version: %i\n", header.version);
+
+    if (header.version == 29)
+    {
+      is_bsp2 = false;
+      printf("BSP Version: %i (Quake 1 v29)\n", header.version);
+    }
+    else if (header.version == BSP2_MAGIC)
+    {
+      is_bsp2 = true;
+      printf("BSP Version: %i (BSP2)\n", header.version);
+    }
+    else
+    {
+      // 0x42535032 ('2PSB') would be the older "extended Q1" / BSP2rmq
+      // format with int32 children but int16 bbox — not implemented here.
+      // 'IBSP' = Quake 2/3, 'VBSP' = Source — completely different formats.
+      printf("BSP Version: %i (UNSUPPORTED)\n", header.version);
+      throw std::runtime_error("Unsupported BSP version: " + std::to_string(header.version)
+                               + " — only Quake 1 v29 and BSP2 are supported.");
+    }
 
     bsp_file.seekg(header.lightmaps.offset);
     lightmap_lump.resize(header.lightmaps.size);
@@ -451,6 +560,17 @@ struct BSP_File
     bsp_file.seekg(dir.offset);
     return ReadT<T>(bsp_file, idx);
   }
+
+  // ---- Format-specific count helpers --------------------------------------
+  // Iteration code that used to do `dir.size / sizeof(Node)` etc. now needs
+  // to use the on-disk struct size, which differs between Q1 and BSP2. Use
+  // these instead of computing the count manually.
+  size_t node_count()     const { return header.nodes.size     / (is_bsp2 ? sizeof(Node_Disk_BSP2)     : sizeof(Node_Disk_Q1)); }
+  size_t leaf_count()     const { return header.leaves.size    / (is_bsp2 ? sizeof(Leaf_Disk_BSP2)     : sizeof(Leaf_Disk_Q1)); }
+  size_t face_count()     const { return header.faces.size     / (is_bsp2 ? sizeof(Face_Disk_BSP2)     : sizeof(Face_Disk_Q1)); }
+  size_t edge_count()     const { return header.edges.size     / (is_bsp2 ? sizeof(Edge_Disk_BSP2)     : sizeof(Edge_Disk_Q1)); }
+  size_t clipnode_count() const { return header.clipnodes.size / (is_bsp2 ? sizeof(Clipnode_Disk_BSP2) : sizeof(Clipnode_Disk_Q1)); }
+  size_t listface_count() const { return header.listfaces.size / (is_bsp2 ? sizeof(uint32_t)           : sizeof(uint16_t)); }
 
   std::vector<Entity> entities()
   {
@@ -487,15 +607,132 @@ struct BSP_File
     return ReadT<Miptex>(bsp_file);
   }
 
-  Vector3 vertex(size_t idx) { return _read<Vector3>(header.vertices, idx); }
-  Node node(size_t idx) { return _read<Node>(header.nodes, idx); }
-  TexInfo texinfo(size_t idx) { return _read<TexInfo>(header.texinfos, idx); }
-  Face face(size_t idx) { return _read<Face>(header.faces, idx); }
-  Leaf leaf(size_t idx) { return _read<Leaf>(header.leaves, idx); }
-  uint16_t listface(size_t idx) { return _read<uint16_t>(header.listfaces, idx); }
-  Edge edge(size_t idx) { return _read<Edge>(header.edges, idx); }
-  int32_t listedge(size_t idx) { return _read<int32_t>(header.listedges, idx); }
-  BSP_Model model(size_t idx) { return _read<BSP_Model>(header.models, idx); }
+  // ---- Lumps that have the same on-disk format in Q1 and BSP2 -------------
+  Vector3   vertex(size_t idx)   { return _read<Vector3>  (header.vertices,  idx); }
+  TexInfo   texinfo(size_t idx)  { return _read<TexInfo>  (header.texinfos,  idx); }
+  int32_t   listedge(size_t idx) { return _read<int32_t>  (header.listedges, idx); }
+  BSP_Model model(size_t idx)    { return _read<BSP_Model>(header.models,    idx); }
+
+  // ---- Lumps that differ between Q1 and BSP2 ------------------------------
+  // Each accessor reads the appropriate disk struct and widens it into the
+  // in-memory struct. Callers see only the in-memory type and don't care
+  // which format the file used.
+  Node node(size_t idx)
+  {
+    if (!is_bsp2)
+    {
+      Node_Disk_Q1 d = _read<Node_Disk_Q1>(header.nodes, idx);
+      Node n;
+      n.plane_id = d.plane_id;
+      n.front    = d.front;            // sign-extends int16 → int32
+      n.back     = d.back;
+      n.box.min  = { (float)d.box.min.x, (float)d.box.min.y, (float)d.box.min.z };
+      n.box.max  = { (float)d.box.max.x, (float)d.box.max.y, (float)d.box.max.z };
+      n.face_id  = d.face_id;
+      n.face_num = d.face_num;
+      return n;
+    }
+    Node_Disk_BSP2 d = _read<Node_Disk_BSP2>(header.nodes, idx);
+    Node n;
+    n.plane_id = d.plane_id;
+    n.front    = d.front;
+    n.back     = d.back;
+    n.box      = d.box;
+    n.face_id  = d.face_id;
+    n.face_num = d.face_num;
+    return n;
+  }
+
+  Leaf leaf(size_t idx)
+  {
+    if (!is_bsp2)
+    {
+      Leaf_Disk_Q1 d = _read<Leaf_Disk_Q1>(header.leaves, idx);
+      Leaf l;
+      l.type          = d.type;
+      l.visibility_id = d.visibility_id;
+      l.bound.min     = { (float)d.bound.min.x, (float)d.bound.min.y, (float)d.bound.min.z };
+      l.bound.max     = { (float)d.bound.max.x, (float)d.bound.max.y, (float)d.bound.max.z };
+      l.listface_id   = d.listface_id;
+      l.listface_num  = d.listface_num;
+      l.sndwater = d.sndwater; l.sndsky = d.sndsky;
+      l.sndslime = d.sndslime; l.sndlava = d.sndlava;
+      return l;
+    }
+    Leaf_Disk_BSP2 d = _read<Leaf_Disk_BSP2>(header.leaves, idx);
+    Leaf l;
+    l.type          = d.type;
+    l.visibility_id = d.visibility_id;
+    l.bound         = d.bound;
+    l.listface_id   = d.listface_id;
+    l.listface_num  = d.listface_num;
+    l.sndwater = d.sndwater; l.sndsky = d.sndsky;
+    l.sndslime = d.sndslime; l.sndlava = d.sndlava;
+    return l;
+  }
+
+  Face face(size_t idx)
+  {
+    if (!is_bsp2)
+    {
+      Face_Disk_Q1 d = _read<Face_Disk_Q1>(header.faces, idx);
+      Face f;
+      f.plane_id   = d.plane_id;
+      f.side       = d.side;
+      f.ledge_id   = d.ledge_id;
+      f.ledge_num  = d.ledge_num;
+      f.texinfo_id = d.texinfo_id;
+      f.typelight  = d.typelight;
+      f.baselight  = d.baselight;
+      f.light[0]   = d.light[0]; f.light[1] = d.light[1];
+      f.lightmap   = d.lightmap;
+      return f;
+    }
+    Face_Disk_BSP2 d = _read<Face_Disk_BSP2>(header.faces, idx);
+    Face f;
+    f.plane_id   = d.plane_id;
+    f.side       = d.side;
+    f.ledge_id   = d.ledge_id;
+    f.ledge_num  = d.ledge_num;
+    f.texinfo_id = d.texinfo_id;
+    f.typelight  = d.typelight;
+    f.baselight  = d.baselight;
+    f.light[0]   = d.light[0]; f.light[1] = d.light[1];
+    f.lightmap   = d.lightmap;
+    return f;
+  }
+
+  Edge edge(size_t idx)
+  {
+    if (!is_bsp2)
+    {
+      Edge_Disk_Q1 d = _read<Edge_Disk_Q1>(header.edges, idx);
+      return { (uint32_t)d.vs, (uint32_t)d.ve };
+    }
+    Edge_Disk_BSP2 d = _read<Edge_Disk_BSP2>(header.edges, idx);
+    return { d.vs, d.ve };
+  }
+
+  Clipnode clipnode(size_t idx)
+  {
+    if (!is_bsp2)
+    {
+      Clipnode_Disk_Q1 d = _read<Clipnode_Disk_Q1>(header.clipnodes, idx);
+      return { d.planenum, (int32_t)d.front, (int32_t)d.back };
+    }
+    Clipnode_Disk_BSP2 d = _read<Clipnode_Disk_BSP2>(header.clipnodes, idx);
+    return { d.planenum, d.front, d.back };
+  }
+
+  // listface: returns uint32 (Q1's uint16 sign-zero-extends naturally).
+  // Callers that stored the result in uint16 will narrow back — fine for
+  // Q1 maps and for any BSP2 map under 64k faces.
+  uint32_t listface(size_t idx)
+  {
+    if (!is_bsp2)
+      return _read<uint16_t>(header.listfaces, idx);
+    return _read<uint32_t>(header.listfaces, idx);
+  }
 
   std::vector<Color_RGB8> miptex_data(size_t idx, uint8_t miplevel)
   {
@@ -621,7 +858,7 @@ static inline Mesh GenMeshFaces(BSP_File &map, std::span<const Face> faces)
 
     for (size_t i = 0; i < face.ledge_num; ++i)
     {
-      int16_t ledge = map.listedge(face.ledge_id + i);
+      int32_t ledge = map.listedge(face.ledge_id + i); // listedge is int32 in both Q1 and BSP2
       Edge edge = map.edge(labs(ledge));
       Vector3 vertex = map.vertex(ledge >= 0 ? edge.vs : edge.ve);
       face_vertices.push_back(vertex);
@@ -888,7 +1125,7 @@ builds sections (clusters) of models seperated up for better lookup when culling
 
       for (int i = 0; i < (int)leaf.listface_num; i++)
       {
-        uint16_t face_id = bsp_file->listface(leaf.listface_id + i);
+        uint32_t face_id = bsp_file->listface(leaf.listface_id + i);
         if (processed[vis_key].count(face_id))
           continue;
         if (submodel_face_ids.count(face_id))
@@ -918,7 +1155,7 @@ builds sections (clusters) of models seperated up for better lookup when culling
 
       for (size_t i = 0; i < face.ledge_num; ++i)
       {
-        int16_t ledge = bsp_file->listedge(face.ledge_id + i);
+        int32_t ledge = bsp_file->listedge(face.ledge_id + i);
         Edge edge = bsp_file->edge(labs(ledge));
         Vector3 vertex = bsp_file->vertex(ledge >= 0 ? edge.vs : edge.ve);
         fv.push_back(vertex);
@@ -1066,12 +1303,15 @@ builds sections (clusters) of models seperated up for better lookup when culling
     // load all nodes & leaves
     bsp_root_node = bsp_file->model(0).bsp_node_id;
 
-    int num_nodes = bsp_file->header.nodes.size / sizeof(Node);
+    // Use the format-aware count helpers — sizeof(Node)/sizeof(Leaf) here
+    // would be the in-memory size (BSP2-wide), which is wrong for a Q1 file
+    // where the on-disk records are smaller.
+    int num_nodes = (int)bsp_file->node_count();
     all_nodes.reserve(num_nodes);
     for (int i = 0; i < num_nodes; i++)
       all_nodes.push_back(bsp_file->node(i));
 
-    int num_leaves = bsp_file->header.leaves.size / sizeof(Leaf);
+    int num_leaves = (int)bsp_file->leaf_count();
     all_leaves.reserve(num_leaves);
     for (int i = 0; i < num_leaves; i++)
       all_leaves.push_back(bsp_file->leaf(i));
@@ -1089,7 +1329,7 @@ builds sections (clusters) of models seperated up for better lookup when culling
                               bsp_file->header.visibility.size);
 
       // each leaf IS its own cluster
-      cluster_count = bsp_file->header.leaves.size / sizeof(Leaf);
+      cluster_count = (int)bsp_file->leaf_count();
       pvs.num_leaves = cluster_count;
 
       BuildLeafToClusterMapping();
@@ -1156,7 +1396,7 @@ builds sections (clusters) of models seperated up for better lookup when culling
 
       for (int i = 0; i < (int)leaf.listface_num; i++)
       {
-        uint16_t face_id = bsp_file->listface(leaf.listface_id + i);
+        uint32_t face_id = bsp_file->listface(leaf.listface_id + i);
 
         if (processed_faces.count(face_id) > 0)
           continue;
@@ -1422,14 +1662,14 @@ struct BSP_Collider
     // Hull 0 (point trace) — uses BSP node tree, not clipnodes
     root_h0_node = map.model(0).bsp_node_id;
 
-    int np = map.header.planes.size / sizeof(Plane);
-    int nc = map.header.clipnodes.size / sizeof(Clipnode);
-    int nn = map.header.nodes.size / sizeof(Node);
-    int nl = map.header.leaves.size / sizeof(Leaf);
+    int np = map.header.planes.size / sizeof(Plane); // Plane is identical in Q1 and BSP2
+    int nc = (int)map.clipnode_count();
+    int nn = (int)map.node_count();
+    int nl = (int)map.leaf_count();
     for (int i = 0; i < np; i++)
       planes.push_back(map.plane(i));
     for (int i = 0; i < nc; i++)
-      clipnodes.push_back(map._read<Clipnode>(map.header.clipnodes, i));
+      clipnodes.push_back(map.clipnode(i)); // format-aware accessor (was _read<Clipnode>)
     for (int i = 0; i < nn; i++)
       h0_nodes.push_back(map.node(i));
     for (int i = 0; i < nl; i++)
