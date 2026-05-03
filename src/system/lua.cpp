@@ -435,10 +435,12 @@ static void register_gameobject3d_usertype(sol::state &lua, bool is_server)
     self.collision_offset = getVec(_offset); 
     self.sync_flags |= SYNC_SIZE; },
 
-      // ----- angle -----
+      // ----- angle / pitch -----
       "set_angle", [](GameObject3D &self, double angle)
       { self.angle = (float)angle; }, "get_angle", [](GameObject3D &self, sol::this_state ts)
       { return (double)self.angle; },
+      "set_pitch", [](GameObject3D &self, double p) { self.pitch = (float)p; },
+      "get_pitch", [](GameObject3D &self)            { return (double)self.pitch; },
 
       // ----- acceleration / speed -----
       "set_acceleration", [](GameObject3D &self, double a)
@@ -458,7 +460,17 @@ static void register_gameobject3d_usertype(sol::state &lua, bool is_server)
       "traceline", [](sol::this_state ts, GameObject3D &self, double dist = 2048.0) -> sol::object
       {
         sol::state_view lua(ts);
-        TraceResult tr = self.TraceViewLine(static_cast<float>(dist));
+        // CRITICAL: use TraceLine (per-object angle+pitch fields), NOT
+        // TraceViewLine. TraceViewLine reads the GLOBAL global_cam_pitch /
+        // global_cam_yaw — those reflect whoever is local on this process
+        // (the host's camera in a listen-server setup), NOT the player
+        // whose method was called. For server-side `player:traceline()`
+        // calls (sv_network.lua interact/shoot handlers), that meant a
+        // remote client's interact ray was actually aimed wherever the
+        // host happened to be looking — every remote player's trace
+        // shared the host's view. TraceLine uses self.angle and self.pitch,
+        // which are synced per-player.
+        TraceResult tr = self.TraceLine(static_cast<float>(dist));
 
         sol::table t = lua.create_table();
         t["fraction"]      = tr.fraction;
@@ -815,7 +827,7 @@ static void bind_globals(sol::state &lua, bool is_server)
                      {
       global_fov = newval;
       if (camera)
-        camera->fovy = (float)newval;
+        camera->fovy = (float)global_fov;
       CFG_SaveSettings(); });
 
     lua.set_function("quit_game", []()
@@ -1546,20 +1558,22 @@ void luaCallEntitySpawner(const std::string &classname,
 
 void luaSpawnBrushEntities()
 {
-  brush_sync_id = 1000;
+  // IDs were already assigned deterministically in C++ SpawnBrushEntities
+  // (1000 + entity_index). Don't re-assign — only call the Lua spawners.
+  // We do still need brush_sync_id to start AFTER the brush range so
+  // luaSpawnEntities (non-brush) doesn't collide. Bump it past whatever
+  // the highest brush id is.
+  int max_brush_id = 999;
   for (auto &obj_ptr : gameobjects)
   {
-    // Try to cast the base pointer to a BrushEntity pointer
     BrushEntity *brush_obj = dynamic_cast<BrushEntity *>(obj_ptr.get());
-
-    // If it's not a BrushEntity (or has no classname), skip it
     if (!brush_obj || brush_obj->classname.empty())
       continue;
-
-    // Now we can access brush_obj->tags because we've casted it
-    brush_obj->client_id = brush_sync_id++;
+    if (brush_obj->client_id > max_brush_id)
+      max_brush_id = brush_obj->client_id;
     luaCallEntitySpawner(brush_obj->classname, brush_obj->position, brush_obj->tags, brush_obj);
   }
+  brush_sync_id = max_brush_id + 1;
 }
 
 void luaSpawnEntities()

@@ -167,7 +167,7 @@ inline void Camera3D_Init()
       .position = {10.0f, 10.0f, 10.0f},
       .target = {0.0f, 0.0f, 0.0f},
       .up = {0.0f, 1.0f, 0.0f},
-      .fovy = 90.0f,
+      .fovy = static_cast<float>(global_fov),
       .projection = CAMERA_PERSPECTIVE});
 
   camera_light = CreateLight(LIGHT_POINT, camera->position, {}, WHITE, shader);

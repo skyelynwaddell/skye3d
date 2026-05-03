@@ -138,9 +138,32 @@ public:
 
 /*
 SpawnBrushEntities
+
+Assign deterministic client_ids (1000 + entity_index) at construction time.
+Both host and client iterate the same BSP entity list in the same order, so
+the resulting ids match without any cross-process coordination. Doing this
+here (in C++ during Init) — instead of later in luaSpawnBrushEntities() during
+the first luaUpdate — ensures every BrushEntity has a real id BEFORE any
+network sync packet can possibly arrive. Otherwise pos/size sync packets sent
+during the connect window find no matching local object and the unmatched-id
+branch creates a phantom duplicate GameObject3D that owns the id forever.
 */
 inline void SpawnBrushEntities()
 {
+  int idx = 0;
   for (auto &data : BSP_SpawnBrushEntities())
-    gameobjects.push_back(std::make_unique<BrushEntity>(data));
+  {
+    auto obj = std::make_unique<BrushEntity>(data);
+    obj->client_id = 1000 + idx;
+    printf("[%s] BrushEntity #%d cls=%s origin=(%.2f,%.2f,%.2f) root=%d root_h0=%d\n",
+           global_is_hosting ? "HOST" : "CLIENT",
+           obj->client_id, data.classname.c_str(),
+           data.origin.x, data.origin.y, data.origin.z,
+           data.clipnode_root, data.bsp_node_root);
+    ++idx;
+    gameobjects.push_back(std::move(obj));
+  }
+  printf("[%s] SpawnBrushEntities done: %d entities, entity_hulls.size()=%zu\n",
+         global_is_hosting ? "HOST" : "CLIENT",
+         idx, bsp_collider.entity_hulls.size());
 }

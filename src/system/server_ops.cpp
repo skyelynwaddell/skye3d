@@ -47,7 +47,7 @@ void SpawnPlayer(int id)
   camera->position = obj->position;
   users[id].object_ref = obj;
 
-  obj->classname = "dummy_player";
+  obj->classname = "dummyplayer";
   obj->collision_box = {1.0f, 2.0f, 1.0f};
   obj->collision_offset = {0.0f, 0.0f, 0.0f};
 };

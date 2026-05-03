@@ -16,6 +16,19 @@ inline float global_cam_pitch = 0.0f;
 inline float global_cam_pitch_max = 1.5f;
 inline float global_analog_sens = 1000.0f;
 
+// view roll
+inline float global_view_roll_angle = 0.0f;
+inline float global_view_roll_angle_limit = 1.5f;
+inline float global_view_roll_speed = 500.0f;
+inline float global_view_roll_scale = 0.5f;
+
+// view bob
+inline float global_view_bob_cycle = 0.0f;
+inline float global_view_bob_freq = 12.0f;
+inline float global_view_bob_amount = 0.13f;
+inline float global_view_bob_scale = 1.0f;
+inline float global_view_bob_intensity = 0.0f;
+
 inline bool global_show_collisions = true;
 inline bool global_draw_fps = false;
 inline float global_fps_x = 0.0f;

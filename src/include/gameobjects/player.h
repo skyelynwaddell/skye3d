@@ -15,6 +15,37 @@ public:
   Vector3 collision_box = {1.0f, 2.0f, 1.0f};
   Vector3 collision_offset = {0.0f, 1.0f, 0.0f};
 
+  void ViewRoll(float smove)
+  {
+    float horizontalvel = sqrtf(velocity.x * velocity.x + velocity.z * velocity.z);
+    if (horizontalvel > 1.0f)
+    {
+      float targetroll = (smove / speed) * global_view_roll_angle_limit * global_view_roll_scale;
+      global_view_roll_angle = Lerp(global_view_roll_angle, -targetroll, GetFrameTime() * 20);
+    }
+    else
+    {
+      global_view_roll_angle = 0.0f;
+    }
+  };
+
+  void ViewBob()
+  {
+
+    float horizontalvel = sqrtf(velocity.x * velocity.x + velocity.z * velocity.z);
+    if (horizontalvel > 1.0f && velocity.y == 0.f)
+    {
+      global_view_bob_cycle += GetFrameTime() * global_view_bob_freq;
+      global_view_bob_intensity = Lerp(global_view_bob_intensity, 1.0f, GetFrameTime() * 10.0f);
+    }
+    else
+    {
+      global_view_bob_intensity = Lerp(global_view_bob_intensity, 0.0f, GetFrameTime() * 10.0f);
+      if (global_view_bob_intensity < 0.001f)
+        global_view_bob_cycle = 0.0f;
+    }
+  };
+
   /*
 HandleRotation
 handles mouse yaw and pitch
@@ -122,21 +153,35 @@ handles mouse yaw and pitch
 Update Camera
 updates camera position, yaw, and pitch
 */
-  void UpdateCamera(Camera3D *camera)
+  void UpdateCamera(Camera3D *camera, float fmove, float smove)
   {
     if (!camera)
       return;
 
-    // Use the exact same direction as GetViewForward() so the camera's
-    // visual aim and the traceline ray are always in perfect agreement.
-    // tanf(pitch) was previously used here but diverges from sinf(pitch) at
-    // any notable look-up/down angle, causing tracelines to miss aimed targets.
+    ViewRoll(smove);
+    ViewBob();
+
     Vector3 viewdir = {
         cosf(global_cam_pitch) * sinf(global_cam_yaw),
         sinf(global_cam_pitch),
         -cosf(global_cam_pitch) * cosf(global_cam_yaw)};
-    camera->position = (Vector3){position.x, position.y + 1.0f, position.z};
+
+    float current_bob = sinf(global_view_bob_cycle) * global_view_bob_amount * global_view_bob_intensity;
+
+    camera->position = (Vector3){
+        position.x,
+        Lerp(camera->position.y, position.y + 1.0f + current_bob, 0.5f),
+        position.z};
+
     camera->target = Vector3Add(camera->position, viewdir);
+    Vector3 world_up = {0, 1, 0};
+    Vector3 right = Vector3Normalize(Vector3CrossProduct(viewdir, world_up));
+    float roll = global_view_roll_angle * DEG2RAD;
+
+    camera->up = (Vector3){
+        world_up.x * cosf(roll) + right.x * sinf(roll),
+        world_up.y * cosf(roll) + right.y * sinf(roll),
+        world_up.z * cosf(roll) + right.z * sinf(roll)};
   };
 
   /*
@@ -169,7 +214,7 @@ updates camera position, yaw, and pitch
 
     position = bsp_collider.MoveAndSlide(position, velocity, forward, right, fmove, smove);
 
-    UpdateCamera(camera.get());
+    UpdateCamera(camera.get(), fmove, smove);
   };
 
   /*
@@ -214,6 +259,10 @@ updates camera position, yaw, and pitch
          {
            Net_ToCPPClient(peer, "set_position", position);
            Net_ToCPPClient(peer, "set_angle", angle);
+           // Pitch goes alongside angle so the server-side traceline used
+           // by sv_network.lua's shoot/interact handlers matches the
+           // client's visual aim. Without it the server traces yaw-only.
+           Net_ToCPPClient(peer, "set_pitch", global_cam_pitch);
          }},
 
         // BroadcastPosition
@@ -223,6 +272,8 @@ updates camera position, yaw, and pitch
          {
            SetPosition(position, my_local_player_id);
            SetAngle(angle, my_local_player_id);
+           // Host writes its own pitch directly — no network round trip.
+           pitch = global_cam_pitch;
          }},
 
         // Add new sync tasks here:

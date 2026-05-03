@@ -86,8 +86,19 @@ int enetclient_connect(const char *host, unsigned short port)
       {
         printf("[CLIENT]: Connected to server %s:%u\n", host, port);
         global_client_init_called = true;
-
         return true;
+      }
+      // CRITICAL: any RECEIVE events that arrive during the connect window
+      // (loopback host case especially — server replies ASSIGN_ID and a
+      // force_full_sync of all gameobjects within microseconds of CONNECT)
+      // must NOT be silently dropped here, or brush entities never get their
+      // real positions on the client. We can't process them now (gameobjects
+      // hasn't been populated yet — Init runs after this returns), so destroy
+      // the packet to avoid a leak and rely on the host's next sync tick to
+      // re-broadcast. Disconnect events: clean up.
+      if (event.type == ENET_EVENT_TYPE_RECEIVE)
+      {
+        enet_packet_destroy(event.packet);
       }
     }
   }
@@ -278,7 +289,7 @@ void enetclient_update()
           users[id_to_spawn].object_ref = obj;
           users[id_to_spawn].player_id = id_to_spawn;
 
-          obj->classname = "dummy_player";
+          obj->classname = "dummyplayer";
           obj->collision_box = {1.0f, 2.0f, 1.0f};
           obj->collision_offset = {0.0f, 0.0f, 0.0f};
         }
@@ -308,9 +319,42 @@ void enetclient_update()
 
         if (!found)
         {
-          // probably an instance the server spawned
+          // ID ranges:
+          //   0..999     = players (created via ASSIGN_ID / INTERNAL_SPAWN)
+          //   1000..1999 = brush entities (always exist locally — both sides
+          //                spawn from the same BSP in SpawnBrushEntities)
+          //   100000+    = lua/dynamic instances (server may have spawned
+          //                these without a matching local object yet)
+          //
+          // For brush entity ids we MUST NOT auto-create a GameObject3D —
+          // the local BrushEntity exists but its EntityHull's entity_pos
+          // points to BrushEntity::position, not to the phantom we'd make.
+          // Auto-creating a duplicate orphans the hull at the spawn origin
+          // and the trace silently uses stale geometry.
+          //
+          // If the brush range ever lacks a match, it means SpawnBrushEntities
+          // hasn't run yet on this client (map mismatch?). Log and drop.
+          if (id >= 1000 && id < 100000)
+          {
+            // Brush entity range — skip; the local BrushEntity will catch
+            // the next SYNC_POS that fires when the entity actually moves.
+            // (For static doors/walls the spawn position is already correct.)
+            printf("[CLIENT] WARN: brush sync for id=%d but no local match (gameobjects=%zu)\n",
+                   id, gameobjects.size());
+            continue;
+          }
+
+          // Lua/dynamic instance the server spawned that we don't have yet.
           auto newobj = InstanceCreate<GameObject3D>(pos);
           newobj->client_id = id;
+        }
+        else if (id >= 1000 && id < 100000)
+        {
+          // Matched brush entity — log first few so we know sync is flowing.
+          static int seen = 0;
+          if (seen++ < 5)
+            printf("[CLIENT] brush sync OK: id=%d pos=(%.2f,%.2f,%.2f)\n",
+                   id, pos.x, pos.y, pos.z);
         }
 
         continue;
@@ -545,6 +589,7 @@ void enetclient_update()
           // printf("[CLIENT]: Creating new object for player %d\n", my_local_player_id);
           auto data = InfoPlayerStart();
           auto obj = InstanceCreate<Player>(data.origin);
+          obj->classname = "player";
           obj->client_id = my_local_player_id;
           obj->is_me = true;
           camera->position = obj->position;

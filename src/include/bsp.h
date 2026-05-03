@@ -42,8 +42,9 @@ struct GameObject3D;
 // is complete. Lets non-template code in bsp.h read/write GameObject3D fields
 // without needing the full type here.
 inline bool GO_BlocksHitscan(const GameObject3D *o);
-inline int  GO_WallbangStrength(const GameObject3D *o);
+inline int GO_WallbangStrength(const GameObject3D *o);
 inline void GO_SetBlocksHitscan(GameObject3D *o, bool v);
+inline void GO_SetPitch(GameObject3D *o, float v);
 
 /*
  TraceResult
@@ -435,6 +436,7 @@ struct BSP_File
       throw std::runtime_error("Failed to open file");
 
     header = ReadT<Header>(bsp_file);
+    printf("BSP Version: %i\n", header.version);
 
     bsp_file.seekg(header.lightmaps.offset);
     lightmap_lump.resize(header.lightmaps.size);
@@ -1984,9 +1986,9 @@ struct BSP_Collider
                        const std::vector<std::unique_ptr<T>> &objects,
                        const T *exclude = nullptr)
   {
-    TraceResult world   = TraceBSP_H0(from, to);
+    TraceResult world = TraceBSP_H0(from, to);
     TraceResult brushes = TraceEntityHullsH0(from, to);
-    TraceResult objs    = TraceObjects(from, to, objects, exclude);
+    TraceResult objs = TraceObjects(from, to, objects, exclude);
 
     // Pick the nearest world-ish hit (worldspawn or brush entity submodel).
     TraceResult world_or_brush = (brushes.fraction < world.fraction) ? brushes : world;
@@ -2030,16 +2032,21 @@ struct BSP_Collider
                             std::vector<GameObject3D *> *out_path = nullptr,
                             int max_walls = 8)
   {
-    constexpr float EPS = 0.01f;       // raylib units past the hit
+    constexpr float EPS = 0.01f; // raylib units past the hit
 
     // RAII guard: any entity we penetrate gets its blocks_hitscan flipped
     // off so the next iteration's TraceAll skips it (otherwise we'd re-hit
     // the same near-face on the very next trace, since EPS is smaller than
     // the wall thickness for anything non-paper-thin). Restored on exit.
     std::vector<GameObject3D *> penetrated;
-    struct Restorer {
+    struct Restorer
+    {
       std::vector<GameObject3D *> &list;
-      ~Restorer() { for (auto *o : list) GO_SetBlocksHitscan(o, true); }
+      ~Restorer()
+      {
+        for (auto *o : list)
+          GO_SetBlocksHitscan(o, true);
+      }
     } restorer{penetrated};
 
     TraceResult last = {};
@@ -2076,7 +2083,7 @@ struct BSP_Collider
 
       // Advance past the impact point by a tiny epsilon along the trace dir.
       Vector3 dir = Vector3Subtract(to, cur_from);
-      float   len = Vector3Length(dir);
+      float len = Vector3Length(dir);
       if (len < 1e-6f)
         return last;
       float advance = tr.fraction * len + EPS;

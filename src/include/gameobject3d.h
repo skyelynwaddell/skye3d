@@ -67,6 +67,12 @@ public:
   int spawnflags = 0;
   float angle = 0;
   float last_angle = 0;
+  // Pitch for player entities, in radians. Synced separately from `angle`
+  // (which is yaw only). Server-side interact / shoot traces need pitch
+  // so they match what the player visually aimed at; without it the
+  // server's traceline is yaw-only and misses anything not at eye height.
+  float pitch = 0.0f;
+  float last_pitch = 0.0f;
   int leaf_id = 0;
   GameModel game_model = {};
   std::function<void(GameObject3D *)> on_trigger_fn;
@@ -94,12 +100,18 @@ public:
     return position;
   }
 
-  // Forward direction derived from angle (same convention as the player camera).
-  // angle is stored as -cam_yaw * RAD2DEG, so we reverse it back to get yaw.
+  // Forward direction derived from angle + pitch. `angle` is stored as
+  // -cam_yaw * RAD2DEG (so we reverse it back), `pitch` is in radians.
+  // For NPCs / non-player objects pitch stays 0 and this collapses to a
+  // flat horizontal forward; for players it includes their view tilt so
+  // server-side traces match visual aim.
   Vector3 GetForward() const
   {
     float yaw = -angle * DEG2RAD;
-    return {sinf(yaw), 0.0f, -cosf(yaw)};
+    float p = pitch;
+    return Vector3Normalize({cosf(p) * sinf(yaw),
+                             sinf(p),
+                             -cosf(p) * cosf(yaw)});
   }
 
   // Eye / muzzle position — must match the camera offset in Player::UpdateCamera.
@@ -198,8 +210,10 @@ public:
         debug_color = PURPLE;
       else if (classname.starts_with("weapon"))
         debug_color = BLUE;
-      else if (classname.starts_with("player"))
+      else if (classname.starts_with("player") || classname.starts_with("dummyplayer"))
         debug_color = YELLOW;
+      else if (classname.starts_with("ambience"))
+        debug_color = GREEN;
 
       DrawCubeWires(Vector3{0, 0, 0}, collision_box.x, collision_box.y, collision_box.z, debug_color);
 
@@ -223,9 +237,18 @@ public:
 // Definitions for the accessor shims forward-declared in bsp.h.
 // Kept here so bsp.h can use them in non-template code without needing
 // the full GameObject3D type at that point in the header chain.
-inline bool GO_BlocksHitscan(const GameObject3D *o)        { return o ? o->blocks_hitscan : true; }
-inline int  GO_WallbangStrength(const GameObject3D *o)     { return o ? o->wallbang_strength : 0; }
-inline void GO_SetBlocksHitscan(GameObject3D *o, bool v)   { if (o) o->blocks_hitscan = v; }
+inline bool GO_BlocksHitscan(const GameObject3D *o) { return o ? o->blocks_hitscan : true; }
+inline int GO_WallbangStrength(const GameObject3D *o) { return o ? o->wallbang_strength : 0; }
+inline void GO_SetBlocksHitscan(GameObject3D *o, bool v)
+{
+  if (o)
+    o->blocks_hitscan = v;
+}
+inline void GO_SetPitch(GameObject3D *o, float v)
+{
+  if (o)
+    o->pitch = v;
+}
 
 // stores all gameobjects in game
 inline std::vector<std::unique_ptr<GameObject3D>> gameobjects;
@@ -251,7 +274,30 @@ inline TraceResult GameObject3D::TraceViewLine(float range)
 {
   Vector3 from = GetEyePos();
   Vector3 to = Vector3Add(from, Vector3Scale(GetViewForward(), range));
-  return bsp_collider.TraceAll(from, to, gameobjects, static_cast<const GameObject3D *>(this));
+  TraceResult tr = bsp_collider.TraceAll(from, to, gameobjects, static_cast<const GameObject3D *>(this));
+
+  // One-shot debug: dump entity hull state the FIRST time a TraceViewLine
+  // is fired, so we can compare what the host vs client thinks the world
+  // looks like for hitscan. Remove after the bug is found.
+  static bool dumped = false;
+  if (!dumped)
+  {
+    dumped = true;
+    printf("[%s] First TraceViewLine — entity_hulls=%zu, gameobjects=%zu\n",
+           global_is_hosting ? "HOST" : "CLIENT",
+           bsp_collider.entity_hulls.size(), gameobjects.size());
+    int n = 0;
+    for (auto &h : bsp_collider.entity_hulls)
+    {
+      Vector3 pos = h.entity_pos ? *h.entity_pos : Vector3{0, 0, 0};
+      printf("   hull[%d] root=%d root_h0=%d spawn=(%.2f,%.2f,%.2f) pos=(%.2f,%.2f,%.2f) owner=%p\n",
+             n++, h.root, h.root_h0,
+             h.spawn_origin.x, h.spawn_origin.y, h.spawn_origin.z,
+             pos.x, pos.y, pos.z, (void *)h.owner);
+    }
+  }
+
+  return tr;
 }
 
 /*

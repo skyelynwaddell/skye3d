@@ -9,8 +9,15 @@ packet_funcs = {
   end,
 
   -- set_sendflags
+  --
+  -- IMPORTANT: SHOOT / INTERACT must fire on the RISING EDGE of their flag,
+  -- not whenever the bit happens to be set in `val`. Any unrelated flag
+  -- change (movement, reload, etc.) re-sends sendflags with INTERACT still
+  -- set if the player is still holding E, and a state-check fired the
+  -- traceline every time — so a single press could toggle the door 2-3x
+  -- and leave it in the wrong state. We keep per-player previous flags
+  -- and only act when a flag goes 0 → 1.
   on_sendflags_sync = function(packet)
-    -- math.tointeger ensures the internal Lua type is shifted to an integer
     local cid = math.tointeger(packet.client_id)
     local val = math.tointeger(packet.value)
 
@@ -19,6 +26,13 @@ packet_funcs = {
       return
     end
 
+    -- per-player flag history; nil on first packet → previous = 0
+    prev_sendflags = prev_sendflags or {}
+    local prev = prev_sendflags[cid] or 0
+    local pressed  = val & ~prev   -- bits that just turned on
+    -- (released bits are val_changed & prev, unused for now)
+    prev_sendflags[cid] = val
+
     sendflags_sync(cid, val)
     local player = get_player_instance(cid)
     if not player then
@@ -26,40 +40,39 @@ packet_funcs = {
       return
     end
 
-    -- Shoot
-    if (val & SENDFLAG_SHOOT) ~= 0 then
-      local tr = player:traceline(2048)
+    -- Shoot — rising edge only
+    if (pressed & SENDFLAG_SHOOT) ~= 0 then
+      local shoot_dist = 2048
+      local tr = player:traceline(shoot_dist)
       if tr then
         if tr.hit_type == "world" then
-          -- hit solid
           print("shot world\n")
         elseif tr.hit_type == "brush_entity" then
-          -- hit brush ent
           print("shot brush ent\n")
         elseif tr.hit_type == "object" then
-          -- hit gameobject
           print("shot gameobject\n")
         end
       end
     end
 
-    -- Interact
-    if (val & SENDFLAG_INTERACT) ~= 0 then
-      local tr = player:traceline(3)
+    -- Interact — rising edge only
+    if (pressed & SENDFLAG_INTERACT) ~= 0 then
+      local interact_dist = 3
+      local p_pos = player:get_position()
+      local p_ang = player:get_angle()
+      local p_pit = player:get_pitch()
+      print(string.format("[SV] cid=%d interact: pos=(%.2f,%.2f,%.2f) yaw=%.2f pitch=%.3f",
+        cid, p_pos.x, p_pos.y, p_pos.z, p_ang, p_pit))
+      local tr = player:traceline(interact_dist)
       if tr then
         if tr.hit_type == "world" then
-          -- hit solid
           print("interacted w/ world\n")
         elseif tr.hit_type == "brush_entity" then
-          -- hit brush ent
-
           if tr.hit_object:get_classname() == "func_door" then
             tr.hit_object:on_trigger()
           end
-
           print("interacted w/ brush ent\n")
         elseif tr.hit_type == "object" then
-          -- hit gameobject
           print("interacted w/ gameobject\n")
         end
       end
